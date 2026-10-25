@@ -23,6 +23,7 @@ Token plans (flat-rate coding plans from z.ai, MiniMax, and similar providers) r
 | `bin/agent.py` | The worker loop: provider chain with polite 429 backoff and quota failover, model tiers (cheap / balanced / flagship), step cap, empty-diff gate, machine manifest, JSONL transcript |
 | `bin/quick_check.py` | Tiny quota probe — sends a minimal completion to verify a plan's quota is live |
 | `bin/render_prompts.py` | Renders the prompt templates with a deployment config into ready-to-install prompts |
+| `bin/install_crons.py` | Renders the three scheduled prompts and writes `local/cron-manifest.json` (sha256 per cron body) — the installer's checklist for putting generated bodies into a scheduler and verifying them |
 | `config/deployment.example.json` | The deployment template — operator, repos, state/worktree paths, cadences, merge-policy specifics. Copy it to `config/deployment.local.json` (gitignored) and fill it in; the local file is the version actually used |
 | `prompts/backlog-supervisor.md` | Orchestration prompt: collect stragglers, pick issues, isolate worktrees, write briefs with a code-discipline section, launch workers, review, PR, ledger |
 | `prompts/pr-shepherd.md` | Orchestration prompt: CI triage, flake reruns, bounded mechanical fixes, and the merge policy |
@@ -68,6 +69,7 @@ Everything specific to one installation lives in a single config file, not in th
 2. `deployment.local.json` is **gitignored** — and so is `local/`, where rendered prompts go. The publish gate's security scan only ever looks at files git would actually publish, so real values in the gitignored files can never leak into a commit.
 3. `bin/agent.py` reads the config at startup (search order: `$PLAN_CODER_CONFIG`, `config/deployment.local.json`, `~/.plan-coder/deployment.json`) for credential-helper labels, the helper directory, and the default transcript directory. Everything is optional — with no config file, the env-key defaults apply.
 4. `bin/render_prompts.py` substitutes the config into the `{{tokens}}` of the prompt templates and writes ready-to-install prompts to `local/`. Two tokens are derived, not stored: the repo table and the per-cycle split sentence are generated from the repo list. Unresolved tokens abort the render — a half-rendered prompt is never written.
+5. The scheduled prompts are generated, not hand-maintained: in the reference deployment the scheduler's saved bodies are byte-identical to the rendered output. `bin/install_crons.py` renders them and emits `local/cron-manifest.json` with each body's sha256; whoever installs them (the operator's agent) updates the scheduler with the rendered content and verifies the saved bodies against the manifest. Edit the templates or the config — never the installed body.
 
 ## Design principles
 

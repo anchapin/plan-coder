@@ -67,8 +67,19 @@ def derived(cfg: dict) -> dict:
     split = ", ".join(
         f"{r.get('issues_per_cycle', 1)} from {r.get('name','')}"
         for r in repos)
+    bullets = "\n".join(
+        f"- {r.get('name','')} — {r.get('clone','')}, {r.get('slug','')}, "
+        f"base {r.get('base','')}" for r in repos)
+    skip_notes = " ".join(
+        f"{r.get('name','').capitalize()}: skip {r['skip_note']}."
+        for r in repos if r.get("skip_note"))
+    brief_extras = " ".join(
+        r["brief_extra"] for r in repos if r.get("brief_extra"))
     return {
         "repos.table": "\n".join(table_lines),
+        "repos.bullets": bullets,
+        "repos.skip_notes": skip_notes,
+        "repos.brief_extras": brief_extras,
         "repos.split_sentence": split,
         "workers.provider_order": ",".join(
             (cfg.get("workers") or {}).get("provider_order") or []),
@@ -113,7 +124,7 @@ def main() -> int:
         except ValueError:
             print(f"skip {fn}: no --- separator between intro and body")
             continue
-        body = "\n".join(lines[cut + 1:]).strip() + "\n"
+        body = "\n".join(lines[cut + 1:]).strip()
 
         def sub(match: re.Match) -> str:
             token = match.group(1)
