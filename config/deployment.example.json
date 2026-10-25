@@ -88,5 +88,40 @@
   "public_repo": {
     "slug": "you/plan-coder",
     "local_clone": "~/plan-coder"
+  },
+  "crons": {
+    "backlog-supervisor": {
+      "title": "Backlog worker supervisor",
+      "schedule": {
+        "kind": "interval",
+        "every": "2h",
+        "timezone": "America/New_York"
+      },
+      "owner": "goal:<your-goal-slug>",
+      "timeout_secs": 10800
+    },
+    "pr-shepherd": {
+      "title": "PR shepherd (CI fix + merge watch)",
+      "schedule": {
+        "kind": "interval",
+        "every": "30m",
+        "timezone": "America/New_York"
+      },
+      "owner": "goal:<your-goal-slug>",
+      "timeout_secs": 3600
+    },
+    "harness-tune": {
+      "title": "Harness tuning (weekly)",
+      "schedule": {
+        "kind": "weekly",
+        "dow": [
+          "Sun"
+        ],
+        "time": "13:06:00",
+        "timezone": "@user.current"
+      },
+      "owner": "goal:<your-goal-slug>",
+      "timeout_secs": 86400
+    }
   }
 }

@@ -89,16 +89,25 @@ def main() -> int:
         "config": "config/deployment.local.json",
         "crons": {},
     }
+    crons_cfg = cfg.get("crons") or {}
+    chat_id = (cfg.get("delivery") or {}).get("chat_id")
     for fn, body in rendered.items():
         dest = os.path.join(out_dir, fn.replace(".md", ".rendered.md"))
         with open(dest, "w", encoding="utf-8") as fh:
             fh.write(body)
         digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
-        manifest["crons"][CRON_IDS[fn]] = {
+        cron_id = CRON_IDS[fn]
+        meta = crons_cfg.get(cron_id) or {}
+        manifest["crons"][cron_id] = {
             "template": f"prompts/{fn}",
             "rendered": dest,
             "sha256": digest,
             "chars": len(body),
+            "title": meta.get("title"),
+            "schedule": meta.get("schedule"),
+            "owner": meta.get("owner"),
+            "timeout_secs": meta.get("timeout_secs"),
+            "delivery": [{"chat_id": chat_id}] if chat_id else [],
         }
         print(f"{CRON_IDS[fn]}: {dest} sha256={digest[:16]}… ({len(body)} chars)")
     with open(os.path.join(out_dir, "cron-manifest.json"), "w",

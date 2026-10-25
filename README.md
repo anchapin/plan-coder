@@ -24,6 +24,7 @@ Token plans (flat-rate coding plans from z.ai, MiniMax, and similar providers) r
 | `bin/quick_check.py` | Tiny quota probe — sends a minimal completion to verify a plan's quota is live |
 | `bin/render_prompts.py` | Renders the prompt templates with a deployment config into ready-to-install prompts |
 | `bin/install_crons.py` | Renders the three scheduled prompts and writes `local/cron-manifest.json` (sha256 per cron body) — the installer's checklist for putting generated bodies into a scheduler and verifying them |
+| `tests/` | Hermetic regression suite (stdlib `unittest`, no network, no credentials) covering config loading, both auth modes, the renderer, the installer manifest, and the publish gate's gitignore behavior. The publish gate runs it and aborts on failure |
 | `config/deployment.example.json` | The deployment template — operator, repos, state/worktree paths, cadences, merge-policy specifics. Copy it to `config/deployment.local.json` (gitignored) and fill it in; the local file is the version actually used |
 | `prompts/backlog-supervisor.md` | Orchestration prompt: collect stragglers, pick issues, isolate worktrees, write briefs with a code-discipline section, launch workers, review, PR, ledger |
 | `prompts/pr-shepherd.md` | Orchestration prompt: CI triage, flake reruns, bounded mechanical fixes, and the merge policy |
