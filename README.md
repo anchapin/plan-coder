@@ -76,3 +76,7 @@ Working system, actively used; published as a reference implementation and a sta
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Maintenance
+
+This repo is a **sanitized mirror** of a live private harness, synced at least weekly. The sync is one-way and mechanical for code: a script transforms the live worker loop into its public form (environment-variable auth in place of the author's private credential vault, a configurable transcript directory), scans the whole tree fail-closed for internal identifiers and secret shapes, compiles, commits, and pushes. The prompts and docs are refreshed in the same pass, generalized by hand. Live operational state — the real ledger, transcripts, and PR-tracking files — never enters this repo; if the scan or a transform check fails, the sync aborts instead of publishing.
