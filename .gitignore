@@ -1,0 +1,19 @@
+# Secrets — keys come from the environment, never from files in this repo
+.env
+*.key
+
+# Python
+__pycache__/
+*.pyc
+
+# Live harness state — private operational data, never committed.
+# (Synthetic samples live under examples/ instead.)
+worker_ledger.jsonl
+workers.json
+shepherd.json
+transcripts/
+WORKER_REPORT.md
+
+# Worker scratch
+fixtrees/
+*.worktree

@@ -1,0 +1,78 @@
+# plan-coder
+
+**A manager/worker harness for running background coding agents on cheap token-plan credits.**
+
+A frontier "manager" agent does the judging — picks backlog issues, writes briefs, isolates git worktrees, reviews diffs, verifies tests, opens PRs, and shepherds CI. Cheap plan models (z.ai GLM Coding Plan, MiniMax token plan) do the typing, inside a small tool-calling worker loop that never commits, never pushes, and never merges.
+
+Built and battle-tested on a real multi-repo backlog: hundreds of worker runs, a metrics ledger, a CI shepherd that merges green PRs under an explicit policy, and a weekly self-tuning pass that treats worker transcripts as a loss signal. This repo is the sanitized, generalized version of that working system — the code, the operating policy, and the three orchestration prompts, with personal state and identifiers removed.
+
+## Why
+
+Token plans (flat-rate coding plans from z.ai, MiniMax, and similar providers) reset on 5-hour and weekly windows. Unused quota is wasted quota — but a cheap model left alone produces cheap-model work: empty diffs declared "done," tests hand-waved as pre-existing failures, scope creep. plan-coder is the discipline layer that makes plan credits produce mergeable PRs:
+
+- **The worker only types.** It gets a brief, a worktree, and five tools (`exec`, `read_file`, `write_file`, `edit_file`, `list_dir`), all confined to its workdir. It cannot commit, push, merge, or reach outside its tree.
+- **Done is verified, never claimed.** An empty-diff completion gate refuses to let a worker finish with no changes unless it quotes discriminating evidence from the brief's own acceptance steps. Every run ends with a harness-generated *machine manifest* — base/head commits, files changed, diffstat, gate triggers — git facts the manager checks against the real diff, never model prose.
+- **Verification is independent.** The manager re-reads the diff, re-runs the tests, and applies a stale-test protocol (stash, re-run on unmodified code, pop) before believing any "pre-existing failure" claim.
+- **The queue keeps itself flowing.** A PR shepherd polls CI every 30 minutes, reruns flakes once, auto-fixes clearly mechanical failures with bounded attempts, and merges well-scoped PRs once their PR-specific CI is green — under a written merge policy with hard stops (domain-judgment changes, workflow/branch-protection edits, anything unverifiable) reserved for the human.
+- **The harness tunes itself, with evidence.** Every run appends one line to a metrics ledger and a truncated JSONL transcript. A weekly tuning pass aggregates outcomes, samples the top failure classes' transcripts, and applies small edits to prompts and routing — each backed by at least two distinct worker runs. Structural changes are flagged for the human, never applied autonomously.
+
+## Components
+
+| Piece | What it does |
+|---|---|
+| `bin/agent.py` | The worker loop: provider chain with polite 429 backoff and quota failover, model tiers (cheap / balanced / flagship), step cap, empty-diff gate, machine manifest, JSONL transcript |
+| `bin/quick_check.py` | Tiny quota probe — sends a minimal completion to verify a plan's quota is live |
+| `prompts/backlog-supervisor.md` | Orchestration prompt: collect stragglers, pick issues, isolate worktrees, write briefs with a code-discipline section, launch workers, review, PR, ledger |
+| `prompts/pr-shepherd.md` | Orchestration prompt: CI triage, flake reruns, bounded mechanical fixes, and the merge policy |
+| `prompts/harness-tune.md` | Orchestration prompt: the weekly evidence-gated self-improvement pass |
+| `docs/OPERATIONS.md` | The operating policy in prose: isolation rules, tier routing, verification discipline, merge hard stops, ledger schema |
+| `docs/ARCHITECTURE.md` | How the pieces fit: roles, state files, and the run lifecycle |
+| `examples/` | A sample brief, sample ledger lines, and a sample worker-state file (all synthetic) |
+
+The prompts are written for a scheduled agent runner (cron-style), but nothing in the worker loop depends on one — you can run `agent.py` by hand against any brief.
+
+## Quick start
+
+```bash
+export ZAI_API_KEY=...        # z.ai (GLM Coding Plan key)
+export MINIMAX_API_KEY=...    # MiniMax (token-plan key)
+
+# Isolate the work
+git worktree add /tmp/my-worker -b worker/123-fix-thing origin/main
+
+# Write a brief (see examples/BRIEF.example.md), then run the worker
+python3 bin/agent.py \
+  --brief /tmp/briefs/BRIEF.md \
+  --workdir /tmp/my-worker \
+  --provider minimax,zai \
+  --model-tier balanced \
+  --max-steps 60
+```
+
+The worker writes `WORKER_REPORT.md` into the workdir: provider/tier used, token totals, its summary, and the machine manifest. The manager (you, or your orchestrating agent) reviews the diff, verifies, commits, and opens the PR.
+
+Provider notes:
+
+- z.ai traffic goes to the **coding-plan endpoint** (`https://api.z.ai/api/coding/paas/v4`), never the pay-as-you-go endpoint.
+- MiniMax is the default priority provider; the chain fails over automatically when a provider stays rate/quota-limited through polite retries. Auth failures (401/403) fail fast instead of burning the fallback provider's quota.
+- Tiers: z.ai cheap `glm-5.3-flashx`, balanced `glm-5.3-flash`, flagship `glm-5.3`; MiniMax cheap `MiniMax-M2.5-highspeed`, balanced `MiniMax-M2.7`, flagship `MiniMax-M3`.
+
+## Design principles
+
+1. **Cheap models type, expensive judgment decides.** Issue selection, brief quality, diff review, and merge decisions are the product; the worker loop is deliberately small (~560 lines, stdlib only).
+2. **Every claim gets a check.** Worker prose is a hint. The manifest, the diff, and a fresh test run are the evidence.
+3. **Isolation before parallelism.** One worktree per worker, never two git writers in one tree — branch switches destroy other writers' uncommitted work.
+4. **State is boring on purpose.** One JSON state file, one append-only JSONL ledger, one transcript per run. When a state file corrupts, the ledger is the recovery source.
+5. **Self-improvement is gated like everything else.** The tuning pass needs two runs of evidence per change and a human gate for anything structural. The system may tune its prompts; it may not rewrite its own authority.
+
+## What is *not* in this repo
+
+The live system's private state — the real metrics ledger, transcripts, PR-tracking state, and operator-specific configuration — is excluded by design (see `.gitignore`). The prompts are templates: repo lists, paths, thresholds, and the merge policy's repo-specific exceptions are placeholders to fill in with your own.
+
+## Status
+
+Working system, actively used; published as a reference implementation and a starting point, not a packaged product. The worker loop is stable; the prompts are living documents that the weekly tuning pass keeps editing.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
