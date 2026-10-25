@@ -6,9 +6,13 @@ Runs a tool-calling agent loop against cheap token-plan models
 Reads a markdown brief, works the task, writes WORKER_REPORT.md.
 Never commits, merges, or pushes — the manager agent does that.
 
-Auth: provider API keys are read from environment variables
-(ZAI_API_KEY / MINIMAX_API_KEY) at request time. They are never
-printed, logged, or written to the transcript or report.
+Auth: two modes, tried in order per provider. (1) The provider's API
+key from the environment (ZAI_API_KEY / MINIMAX_API_KEY). (2) A
+credential-helper module named `dynamic_credentials` — a platform shim
+that injects a vault-held credential into the request without this
+process ever seeing key material — found via $PLAN_CODER_CRED_DIR or
+~/.plan-coder/cred/ when present. Keys are never printed, logged, or
+written to the transcript or report.
 """
 from __future__ import annotations
 
@@ -25,6 +29,8 @@ PROVIDERS = {
     "zai": {
         "chat_url": "https://api.z.ai/api/coding/paas/v4/chat/completions",
         "env_key": "ZAI_API_KEY",
+        "credential": "custom.zai",
+        "hosts": ("api.z.ai",),
         "default_model": "glm-5.3-flash",
         "tiers": {
             "cheap": "glm-5.3-flashx",
@@ -35,6 +41,8 @@ PROVIDERS = {
     "minimax": {
         "chat_url": "https://api.minimax.io/v1/chat/completions",
         "env_key": "MINIMAX_API_KEY",
+        "credential": "custom.minimax",
+        "hosts": ("api.minimax.io",),
         "default_model": "MiniMax-M2.7",
         "tiers": {
             "cheap": "MiniMax-M2.5-highspeed",
@@ -315,6 +323,63 @@ class _WorkerAborted(RuntimeError):
     """The model loop aborted (all providers exhausted)."""
 
 
+_DC_UNSET = object()
+_dc_module = _DC_UNSET
+
+
+def _load_dc():
+    """Return the credential-helper module if one is configured, else
+    None. Search order: $PLAN_CODER_CRED_DIR, then ~/.plan-coder/cred.
+    Lazy and optional — env-key-only setups never need the helper."""
+    global _dc_module
+    if _dc_module is not _DC_UNSET:
+        return _dc_module
+    _dc_module = None
+    candidates = []
+    env_dir = os.environ.get("PLAN_CODER_CRED_DIR")
+    if env_dir:
+        candidates.append(env_dir)
+    candidates.append(os.path.expanduser("~/.plan-coder/cred"))
+    for cand in candidates:
+        if cand and os.path.isfile(os.path.join(cand, "dynamic_credentials.py")):
+            if cand not in sys.path:
+                sys.path.insert(0, cand)
+            try:
+                import dynamic_credentials
+
+                _dc_module = dynamic_credentials
+            except Exception:  # noqa: BLE001 - a broken helper is a config error
+                _dc_module = None
+            break
+    return _dc_module
+
+
+def _apply_auth(req, provider: dict) -> str:
+    """Attach credentials to the request. Returns "env" or "helper".
+    Raises RuntimeError on missing/broken credentials: that is a setup
+    problem, not scarcity, and must fail fast rather than burn the
+    fallback provider's quota."""
+    key = os.environ.get(provider["env_key"], "")
+    if key:
+        req.add_header("Authorization", f"Bearer {key}")
+        return "env"
+    dc = _load_dc()
+    if dc is not None:
+        dc.add_surrogate_to_request(
+            req, provider["credential"], allowed_hosts=provider["hosts"])
+        return "helper"
+    raise RuntimeError(
+        f"no credential available: set {provider['env_key']} in the "
+        "environment, or configure a credential helper "
+        "($PLAN_CODER_CRED_DIR or ~/.plan-coder/cred)")
+
+
+def _read_response(resp, mode: str) -> dict:
+    if mode == "helper":
+        return _dc_module.read_json_response(resp)
+    return json.loads(resp.read().decode("utf-8"))
+
+
 def chat_once(provider: dict, model: str, messages: list, tools: list) -> dict:
     """Try one provider with polite backoff. Raises _ProviderExhausted when
     it stays limited; RuntimeError for credential/config problems."""
@@ -324,18 +389,14 @@ def chat_once(provider: dict, model: str, messages: list, tools: list) -> dict:
     last_err: Exception | None = None
     limited = False
     for attempt in range(6):
-        api_key = os.environ.get(provider["env_key"], "")
-        if not api_key:
-            raise RuntimeError(
-                f"missing API key: set {provider['env_key']} in the environment")
         req = urllib.request.Request(
             provider["chat_url"], data=payload, method="POST",
-            headers={"Content-Type": "application/json",
-                     "Authorization": f"Bearer {api_key}"},
+            headers={"Content-Type": "application/json"},
         )
+        mode = _apply_auth(req, provider)
         try:
             with urllib.request.urlopen(req, timeout=120) as resp:
-                return json.loads(resp.read().decode("utf-8"))
+                return _read_response(resp, mode)
         except urllib.error.HTTPError as exc:
             if exc.code == 429:
                 # Rate limited: back off politely, honor Retry-After.

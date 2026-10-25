@@ -4,7 +4,7 @@
 
 A frontier "manager" agent does the judging — picks backlog issues, writes briefs, isolates git worktrees, reviews diffs, verifies tests, opens PRs, and shepherds CI. Cheap plan models (z.ai GLM Coding Plan, MiniMax token plan) do the typing, inside a small tool-calling worker loop that never commits, never pushes, and never merges.
 
-Built and battle-tested on a real multi-repo backlog: hundreds of worker runs, a metrics ledger, a CI shepherd that merges green PRs under an explicit policy, and a weekly self-tuning pass that treats worker transcripts as a loss signal. This repo is the sanitized, generalized version of that working system — the code, the operating policy, and the three orchestration prompts, with personal state and identifiers removed.
+Built and battle-tested on a real multi-repo backlog: hundreds of worker runs, a metrics ledger, a CI shepherd that merges green PRs under an explicit policy, and a weekly self-tuning pass that treats worker transcripts as a loss signal. This repo is that working system — the code the author actually runs, its operating policy, and the three orchestration prompts — with personal state and deployment identifiers kept out (see Maintenance).
 
 ## Why
 
@@ -53,6 +53,7 @@ The worker writes `WORKER_REPORT.md` into the workdir: provider/tier used, token
 
 Provider notes:
 
+- Auth is dual-mode: a provider API key from the environment (`ZAI_API_KEY` / `MINIMAX_API_KEY`) if set, otherwise a `dynamic_credentials` credential-helper module (found via `$PLAN_CODER_CRED_DIR` or `~/.plan-coder/cred/`) that injects a vault-held credential into the request without the worker process ever seeing key material. Missing or broken credentials fail fast with configuration guidance.
 - z.ai traffic goes to the **coding-plan endpoint** (`https://api.z.ai/api/coding/paas/v4`), never the pay-as-you-go endpoint.
 - MiniMax is the default priority provider; the chain fails over automatically when a provider stays rate/quota-limited through polite retries. Auth failures (401/403) fail fast instead of burning the fallback provider's quota.
 - Tiers: z.ai cheap `glm-5.3-flashx`, balanced `glm-5.3-flash`, flagship `glm-5.3`; MiniMax cheap `MiniMax-M2.5-highspeed`, balanced `MiniMax-M2.7`, flagship `MiniMax-M3`.
@@ -79,4 +80,6 @@ MIT — see [LICENSE](LICENSE).
 
 ## Maintenance
 
-This repo is a **sanitized mirror** of a live private harness, synced at least weekly. The sync is one-way and mechanical for code: a script transforms the live worker loop into its public form (environment-variable auth in place of the author's private credential vault, a configurable transcript directory), scans the whole tree fail-closed for internal identifiers and secret shapes, compiles, commits, and pushes. The prompts and docs are refreshed in the same pass, generalized by hand. Live operational state — the real ledger, transcripts, and PR-tracking files — never enters this repo; if the scan or a transform check fails, the sync aborts instead of publishing.
+This repo is not a copy of the harness — since the October 2026 unification refactor, **it is the harness**: the author's live system executes `bin/agent.py` from this working tree (via symlinks from its skill directories), with machine-specific configuration kept outside the repo (the credential helper under `~/.plan-coder/cred`, the transcript directory passed as a flag, live state in a separate private directory). There is no translation step between "live" and "public" code.
+
+What keeps that safe is a fail-closed publish gate, run at least weekly by the harness-tune pass: a script scans the whole tree for internal identifiers and secret shapes, compiles every Python file, and only then commits and pushes. The prompts and docs are generalized by hand in the same pass (they describe a private deployment: concrete repo names, paths, and state locations become placeholders). Live operational state — the real ledger, transcripts, and PR-tracking files — never enters this repo; if the scan or a compile check fails, the publish aborts instead of going out.
