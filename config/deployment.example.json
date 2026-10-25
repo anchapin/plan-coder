@@ -123,5 +123,8 @@
       "owner": "goal:<your-goal-slug>",
       "timeout_secs": 86400
     }
+  },
+  "publish_gate": {
+    "doc_sources": []
   }
 }
