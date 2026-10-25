@@ -1,0 +1,27 @@
+{
+  "_about": "Deployment configuration for plan-coder. Copy this file to deployment.local.json in the same directory and fill in your real values. deployment.local.json is gitignored and is the version actually used: bin/agent.py reads it at startup (credential-helper labels, transcript directory) and bin/render_prompts.py renders the prompt templates in prompts/ with it into local/ (also gitignored). Search order for the config: $PLAN_CODER_CONFIG, then config/deployment.local.json relative to the repo root, then ~/.plan-coder/deployment.json. Every field is optional; built-in defaults cover a standalone env-key setup.",
+  "operator": {"name": "Your Name"},
+  "state": {
+    "dir": "~/.plan-coder/state",
+    "transcripts_dir": "~/.plan-coder/state/transcripts"
+  },
+  "worktrees": {"dir": "~/worktrees"},
+  "repos": [
+    {"name": "repo-a", "clone": "~/repos/repo-a", "slug": "you/repo-a", "base": "develop", "issues_per_cycle": 2},
+    {"name": "repo-b", "clone": "~/repos/repo-b", "slug": "you/repo-b", "base": "main", "issues_per_cycle": 1}
+  ],
+  "supervisor": {"max_parallel": 6, "collect_deadline_hours": 2.5, "interval_hours": 2},
+  "workers": {"max_steps": 60, "provider_order": ["minimax", "zai"]},
+  "providers": {
+    "zai": {"env_key": "ZAI_API_KEY", "credential": "custom.zai"},
+    "minimax": {"env_key": "MINIMAX_API_KEY", "credential": "custom.minimax"}
+  },
+  "credentials": {"helper_dir": "~/.plan-coder/cred"},
+  "shepherd": {"interval_minutes": 30, "trigger_cooldown_minutes": 30, "max_fix_attempts": 2},
+  "merge_policy": {
+    "known_failures": "<required-checks drift>, <regression tracked in #NNNN>",
+    "hard_stop_domain": "simulation/physics outputs"
+  },
+  "tune": {"ideas_brief_file": "ideas-brief.md"},
+  "delivery": {"chat_id": "<chat-or-channel-id-if-your-runner-needs-one>"}
+}

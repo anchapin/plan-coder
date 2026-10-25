@@ -17,3 +17,8 @@ WORKER_REPORT.md
 # Worker scratch
 fixtrees/
 *.worktree
+
+# Deployment configuration — the example is committed, the filled
+# local version (and everything rendered from it) is not.
+config/deployment.local.json
+local/

@@ -52,6 +52,57 @@ PROVIDERS = {
     },
 }
 
+# --- deployment configuration (optional) ---------------------------------
+# A deployment config customizes this worker for one installation without
+# code changes: provider credential-helper labels, the credential-helper
+# directory, and the default transcript directory. Search order:
+# $PLAN_CODER_CONFIG, then config/deployment.local.json next to this
+# repo's root, then ~/.plan-coder/deployment.json. The committed template
+# is config/deployment.example.json; the filled local file is gitignored.
+# Missing or malformed config is never fatal — built-in defaults apply.
+
+def _load_deployment_config() -> dict:
+    candidates = []
+    env_path = os.environ.get("PLAN_CODER_CONFIG")
+    if env_path:
+        candidates.append(env_path)
+    repo_root = os.path.dirname(os.path.dirname(
+        os.path.realpath(os.path.abspath(__file__))))
+    candidates.append(os.path.join(
+        repo_root, "config", "deployment.local.json"))
+    candidates.append(os.path.expanduser("~/.plan-coder/deployment.json"))
+    for path in candidates:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+            if isinstance(data, dict):
+                return data
+        except Exception:  # noqa: BLE001 - config is a convenience, not a gate
+            continue
+    return {}
+
+
+DEPLOYMENT = _load_deployment_config()
+
+
+def _cfg(*keys, default=None):
+    node = DEPLOYMENT
+    for key in keys:
+        if not isinstance(node, dict) or key not in node:
+            return default
+        node = node[key]
+    return node
+
+
+for _pname, _prov in PROVIDERS.items():
+    _cred = _cfg("providers", _pname, "credential")
+    if _cred:
+        _prov["credential"] = _cred
+    _env_key = _cfg("providers", _pname, "env_key")
+    if _env_key:
+        _prov["env_key"] = _env_key
+
+
 SYSTEM_PROMPT = """You are a coding worker operating inside a single project
 worktree directory. A manager gave you a task brief (the user message).
 Work the task with the available tools.
@@ -339,6 +390,9 @@ def _load_dc():
     env_dir = os.environ.get("PLAN_CODER_CRED_DIR")
     if env_dir:
         candidates.append(env_dir)
+    cfg_dir = _cfg("credentials", "helper_dir")
+    if cfg_dir:
+        candidates.append(os.path.expanduser(cfg_dir))
     candidates.append(os.path.expanduser("~/.plan-coder/cred"))
     for cand in candidates:
         if cand and os.path.isfile(os.path.join(cand, "dynamic_credentials.py")):
@@ -480,9 +534,11 @@ def main() -> int:
     # small. This process never sees key material, so there is nothing
     # sensitive to redact.
     run_id = args.run_id or time.strftime("run-%Y%m%d-%H%M%S")
-    transcript_dir = args.transcript_dir or os.path.expanduser(
-        os.environ.get("PLAN_CODER_TRANSCRIPT_DIR",
-                       "~/.plan-coder/transcripts"))
+    transcript_dir = os.path.expanduser(
+        args.transcript_dir
+        or os.environ.get("PLAN_CODER_TRANSCRIPT_DIR")
+        or _cfg("state", "transcripts_dir")
+        or "~/.plan-coder/transcripts")
     os.makedirs(transcript_dir, exist_ok=True)
     transcript_path = os.path.join(transcript_dir, f"{run_id}.jsonl")
 

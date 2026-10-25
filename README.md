@@ -22,6 +22,8 @@ Token plans (flat-rate coding plans from z.ai, MiniMax, and similar providers) r
 |---|---|
 | `bin/agent.py` | The worker loop: provider chain with polite 429 backoff and quota failover, model tiers (cheap / balanced / flagship), step cap, empty-diff gate, machine manifest, JSONL transcript |
 | `bin/quick_check.py` | Tiny quota probe — sends a minimal completion to verify a plan's quota is live |
+| `bin/render_prompts.py` | Renders the prompt templates with a deployment config into ready-to-install prompts |
+| `config/deployment.example.json` | The deployment template — operator, repos, state/worktree paths, cadences, merge-policy specifics. Copy it to `config/deployment.local.json` (gitignored) and fill it in; the local file is the version actually used |
 | `prompts/backlog-supervisor.md` | Orchestration prompt: collect stragglers, pick issues, isolate worktrees, write briefs with a code-discipline section, launch workers, review, PR, ledger |
 | `prompts/pr-shepherd.md` | Orchestration prompt: CI triage, flake reruns, bounded mechanical fixes, and the merge policy |
 | `prompts/harness-tune.md` | Orchestration prompt: the weekly evidence-gated self-improvement pass |
@@ -57,6 +59,15 @@ Provider notes:
 - z.ai traffic goes to the **coding-plan endpoint** (`https://api.z.ai/api/coding/paas/v4`), never the pay-as-you-go endpoint.
 - MiniMax is the default priority provider; the chain fails over automatically when a provider stays rate/quota-limited through polite retries. Auth failures (401/403) fail fast instead of burning the fallback provider's quota.
 - Tiers: z.ai cheap `glm-5.3-flashx`, balanced `glm-5.3-flash`, flagship `glm-5.3`; MiniMax cheap `MiniMax-M2.5-highspeed`, balanced `MiniMax-M2.7`, flagship `MiniMax-M3`.
+
+## Deployment configuration
+
+Everything specific to one installation lives in a single config file, not in the code or the prompts:
+
+1. Copy `config/deployment.example.json` to `config/deployment.local.json` and fill in your values (operator name, repo list with clone paths/slugs/base branches and per-cycle issue counts, state and worktree directories, cadences, your merge-policy specifics like known repo-wide failures, and your credential-helper labels if you use one).
+2. `deployment.local.json` is **gitignored** — and so is `local/`, where rendered prompts go. The publish gate's security scan only ever looks at files git would actually publish, so real values in the gitignored files can never leak into a commit.
+3. `bin/agent.py` reads the config at startup (search order: `$PLAN_CODER_CONFIG`, `config/deployment.local.json`, `~/.plan-coder/deployment.json`) for credential-helper labels, the helper directory, and the default transcript directory. Everything is optional — with no config file, the env-key defaults apply.
+4. `bin/render_prompts.py` substitutes the config into the `{{tokens}}` of the prompt templates and writes ready-to-install prompts to `local/`. Two tokens are derived, not stored: the repo table and the per-cycle split sentence are generated from the repo list. Unresolved tokens abort the render — a half-rendered prompt is never written.
 
 ## Design principles
 

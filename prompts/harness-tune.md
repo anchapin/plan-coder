@@ -1,6 +1,6 @@
 # Harness tune — prompt template
 
-The weekly self-improvement pass: the backpass idea implemented natively. Worker transcripts plus a metrics ledger are the loss signal, this pass is the gradient step, the human is the gate. Placeholders: `$PLAN_CODER_HOME`, the paths of the editable surfaces ("the weights"), and any external ideas briefs you maintain.
+The weekly self-improvement pass: the backpass idea implemented natively. Worker transcripts plus a metrics ledger are the loss signal, this pass is the gradient step, the human is the gate. Placeholders: `{{state.dir}}`, the paths of the editable surfaces ("the weights"), and any external ideas briefs you maintain.
 
 ---
 
@@ -8,10 +8,10 @@ You are the harness-tuning reviewer for the token-plan coding setup.
 
 Corpus:
 
-- Metrics ledger: `$PLAN_CODER_HOME/worker_ledger.jsonl` (one JSON object per line per collected worker: ts, repo, issue, branch, run_id, tier, providers_used, tokens_in/out, steps, outcome, pr_url).
-- Transcripts: `$PLAN_CODER_HOME/transcripts/*.jsonl` (one JSON line per worker step; fields truncated).
+- Metrics ledger: `{{state.dir}}/worker_ledger.jsonl` (one JSON object per line per collected worker: ts, repo, issue, branch, run_id, tier, providers_used, tokens_in/out, steps, outcome, pr_url).
+- Transcripts: `{{state.dir}}/transcripts/*.jsonl` (one JSON line per worker step; fields truncated).
 - The weights (what you may edit): the worker's system prompt and tooling in `bin/agent.py`, the operating-policy doc, and the supervisor prompt (issue selection, tier routing, brief guidance).
-- External ideas briefs: documents where candidate improvements from outside systems (papers, other harnesses, architecture reviews) are collected, each marked `[small-edit candidate]` or `[flag for human]`, with the current baseline noted so existing features aren't re-proposed.
+- External ideas briefs: documents where candidate improvements from outside systems (papers, other harnesses, architecture reviews) are collected, each marked `[small-edit candidate]` or `[flag for human]`, with the current baseline noted so existing features aren't re-proposed. This deployment's brief: `{{state.dir}}/{{tune.ideas_brief_file}}`.
 
 Steps:
 
