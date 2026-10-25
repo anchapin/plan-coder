@@ -19,11 +19,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 
 PROVIDERS = {
     "zai": {
@@ -108,8 +110,18 @@ worktree directory. A manager gave you a task brief (the user message).
 Work the task with the available tools.
 
 Rules:
-- Stay inside the work directory. Never read or write outside it.
+- Stay inside the work directory. Never read or write outside it — that
+  includes shell commands: no `find /`, no listing home or workspace
+  roots, no absolute paths outside the workdir. If you cannot locate
+  the workdir, say so in your summary instead of searching the
+  filesystem for it.
 - Explore before changing: read relevant files first.
+- Make your first scoped edit early. Exploration, benchmarking, or
+  planning that has produced no change by the halfway point of your
+  step budget almost never finishes — runs that reach the step cap
+  still exploring end with an empty diff. If the task genuinely needs
+  no change, run the acceptance/repro commands and quote their output
+  instead of continuing to explore.
 - Make minimal, focused changes that satisfy the brief's acceptance criteria.
 - Run the test commands from the brief (or the repo's obvious test command)
   before finishing. Fix failures you introduced.
@@ -208,6 +220,16 @@ EMPTY_DIFF_GATE_MAX_ROUNDS = int(os.environ.get("WORKER_EMPTY_DIFF_GATE_ROUNDS",
 
 EMPTY_DIFF_GATE_PROMPT = """COMPLETION GATE: you are trying to finish with no code changes in the worktree (no diff against the base commit, no new files). That is only acceptable if the task genuinely requires no change. Provide discriminating evidence: run the task's own acceptance or repro steps from the brief against the current unmodified code and quote the exact command and its output. Verifying with an unrelated or pre-existing check does not count. If the evidence shows the work is truly unnecessary, say so explicitly with the quoted evidence. Otherwise make the required change now."""
 
+# Mid-run no-edit gate (harness-tune 2026-10-25): in the week reviewed,
+# every failed:empty-diff run (13) burned all 60 steps exploring and
+# never edited, while PR-opened runs made their first edit at a median
+# step of ~21. One nudge at the halfway point, while half the budget
+# remains, is the cheapest point to break that pattern. Env-gated like
+# the empty-diff gate, fires at most once per run.
+MIDRUN_GATE_ENABLED = os.environ.get("WORKER_MIDRUN_GATE", "1") == "1"
+
+MIDRUN_GATE_PROMPT = """MID-RUN CHECKPOINT: half your step budget is used and the worktree still has no changes (no diff against the base commit, no new files). Do not spend the remaining steps purely exploring, benchmarking, or planning — runs that reach the step cap still exploring end with an empty diff and are discarded. Choose one now: (1) make the smallest scoped edit that satisfies one acceptance criterion and build from there; (2) if the task genuinely requires no change, run the brief's acceptance/repro commands now and quote the exact commands and output as evidence; or (3) if you are blocked, state exactly what blocks you and finish with that in your summary."""
+
 
 def _git_out(workdir: str, *args: str) -> str | None:
     """Run a read-only git command in workdir; None on any failure."""
@@ -235,7 +257,48 @@ def _worktree_changed(workdir: str, base: str | None) -> bool | None:
     return len(names) > 0
 
 
-def _machine_manifest(workdir: str, base: str | None, gate_triggers: int) -> str:
+_SECRET_SHAPE = re.compile(
+    r"(sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{16,}"
+    r"|github_pat_[A-Za-z0-9_]{16,}|Bearer\s+[A-Za-z0-9._-]{16,})")
+
+
+def _redact(text: str) -> str:
+    """Hygiene for stored transcript lines (harness-tune 2026-10-25,
+    ideas brief T4): mask secret-shaped strings and shorten the home
+    directory prefix to ~. This is not a security boundary — workers
+    are worktree-confined and keys never pass through this process —
+    but tool output a worker catted can carry paths or token shapes
+    into the stored logs. Fails toward masking more, never toward
+    skipping the write: error classes, exit codes, and the first line
+    of output all survive."""
+    home = os.path.expanduser("~")
+    if home and home != "~":
+        text = text.replace(home, "~")
+    return _SECRET_SHAPE.sub("***", text)
+
+
+def _tool_result_kind(result: str) -> str:
+    """Typed tool-error taxonomy (harness-tune 2026-10-25, ideas brief
+    T2): a small closed vocabulary recorded alongside the raw result
+    string, never instead of it, so failure modes are countable
+    without breaking grep-based transcript review."""
+    if result.startswith("TIMEOUT after"):
+        return "exec_timeout"
+    if result.startswith("exit="):
+        code = result[5:].split("\n", 1)[0].strip()
+        return "ok" if code == "0" else "exec_nonzero"
+    if "edit failed: old_text not found" in result:
+        return "edit_miss"
+    if result.startswith("tool error:"):
+        if "path escapes workdir" in result:
+            return "path_escape"
+        exc = result[len("tool error:"):].split(":", 1)[0].strip()
+        return f"tool_error:{exc}" if exc else "tool_error"
+    return "ok"
+
+
+def _machine_manifest(workdir: str, base: str | None, gate_triggers: int,
+                      midrun_triggers: int = 0) -> str:
     """Harness-generated git facts for the supervisor to verify.
     Never model prose: unreadable facts degrade to status unknown with a
     named blocker instead of a fabricated 'ready'."""
@@ -273,7 +336,8 @@ def _machine_manifest(workdir: str, base: str | None, gate_triggers: int) -> str
             lines.append("```")
             lines.append(stat)
             lines.append("```")
-    lines.append(f"- gate_triggers: empty_diff={gate_triggers}")
+    lines.append(f"- gate_triggers: empty_diff={gate_triggers}, "
+                 f"midrun_no_edit={midrun_triggers}")
     return "\n".join(lines)
 
 
@@ -531,8 +595,13 @@ def main() -> int:
 
     # Transcript log: one JSON line per step, feeding the weekly
     # harness-tuning review. Fields are truncated hard so a long run stays
-    # small. This process never sees key material, so there is nothing
-    # sensitive to redact.
+    # small. This process never sees key material, but tool output can
+    # carry absolute paths or secret-shaped strings from files the
+    # worker read, so every line passes through _redact() before it is
+    # written (hygiene for stored logs, not a security boundary).
+    # Every event carries a UTC `ts`; step events also carry
+    # `duration_ms` and typed `tool_result_kinds` (harness-tune
+    # 2026-10-25, ideas brief T1/T2).
     run_id = args.run_id or time.strftime("run-%Y%m%d-%H%M%S")
     transcript_dir = os.path.expanduser(
         args.transcript_dir
@@ -549,8 +618,11 @@ def main() -> int:
     _tlog = open(transcript_path, "w", encoding="utf-8")
 
     def tlog(obj: dict) -> None:
-        _tlog.write(json.dumps(obj, ensure_ascii=False) + "\n")
+        obj = {"ts": datetime.now(timezone.utc).isoformat(), **obj}
+        _tlog.write(_redact(json.dumps(obj, ensure_ascii=False)) + "\n")
         _tlog.flush()
+
+    run_started = time.monotonic()
 
     tlog({"event": "started", "run_id": run_id, "tier": tier,
           "chain": [f"{n}/{m}" for n, _, m in chain]})
@@ -571,6 +643,8 @@ def main() -> int:
     providers_used: set[str] = set()
     gate_triggers = 0
     gate_rounds_used = 0
+    midrun_triggers = 0
+    midrun_step = max(1, args.max_steps // 2)
     # Pin the base commit before the worker touches anything: the
     # empty-diff gate and the machine manifest measure against this.
     base_commit = _git_out(workdir, "rev-parse", "HEAD")
@@ -579,6 +653,7 @@ def main() -> int:
         """One chat + tool-execution round. Returns True to keep looping,
         False when the worker produced no tool calls (wants to finish)."""
         nonlocal final_text, total_in, total_out
+        step_started = time.monotonic()
         try:
             data, used_provider, used_model = chat(chain, messages, TOOLS)
             providers_used.add(f"{used_provider}/{used_model}")
@@ -598,6 +673,7 @@ def main() -> int:
             return False
         calls_log = []
         results_log = []
+        kinds_log = []
         for tc in tool_calls:
             name = tc["function"]["name"]
             try:
@@ -608,6 +684,7 @@ def main() -> int:
                 tc["function"].get("arguments") or "{}", 500)})
             result = worker.run_tool(name, fargs)
             results_log.append(_trunc(result, 800))
+            kinds_log.append(_tool_result_kind(result))
             messages.append(
                 {
                     "role": "tool",
@@ -618,10 +695,12 @@ def main() -> int:
             )
         tlog({"step": steps_used, "provider": used_provider,
               "model": used_model,
+              "duration_ms": int((time.monotonic() - step_started) * 1000),
               "tokens_in": usage.get("prompt_tokens", 0),
               "tokens_out": usage.get("completion_tokens", 0),
               "assistant_text": _trunc(msg.get("content") or "", 400),
-              "tool_calls": calls_log, "tool_results": results_log})
+              "tool_calls": calls_log, "tool_results": results_log,
+              "tool_result_kinds": kinds_log})
         return True
 
     hit_max_steps = True
@@ -636,6 +715,18 @@ def main() -> int:
             hit_max_steps = False
             break
         if keep_going:
+            # Mid-run no-edit gate: at the halfway point, a worktree
+            # with still no changes gets one checkpoint nudge while
+            # half the budget remains to act on it.
+            if (MIDRUN_GATE_ENABLED and midrun_triggers == 0
+                    and step >= midrun_step
+                    and _worktree_changed(workdir, base_commit) is False):
+                midrun_triggers += 1
+                tlog({"step": step, "event": "gate_trigger",
+                      "gate": "midrun_no_edit", "round": midrun_triggers,
+                      "max_rounds": 1})
+                messages.append({"role": "user",
+                                 "content": MIDRUN_GATE_PROMPT})
             continue
         # The worker wants to finish: empty-diff completion gate.
         changed = _worktree_changed(workdir, base_commit)
@@ -664,16 +755,19 @@ def main() -> int:
         f"- Files changed: {', '.join(worker.files_changed) or '(none)'}\n"
         f"- Commands run: {len(worker.commands)}\n\n"
         f"## Summary\n\n{final_text}\n\n"
-        + _machine_manifest(workdir, base_commit, gate_triggers)
+        + _machine_manifest(workdir, base_commit, gate_triggers,
+                            midrun_triggers)
         + "\n"
     )
     with open(os.path.join(workdir, "WORKER_REPORT.md"), "w", encoding="utf-8") as fh:
         fh.write(report)
     tlog({"event": "finished", "steps": steps_used,
+          "duration_ms": int((time.monotonic() - run_started) * 1000),
           "total_in": total_in, "total_out": total_out,
           "files_changed": worker.files_changed,
           "commands_run": len(worker.commands),
-          "gate_triggers": gate_triggers})
+          "gate_triggers": gate_triggers,
+          "midrun_gate_triggers": midrun_triggers})
     _tlog.close()
     print(report)
     return 0

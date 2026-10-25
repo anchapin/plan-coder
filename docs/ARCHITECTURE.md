@@ -21,8 +21,13 @@ backlog issue
   │     · provider chain: MiniMax → z.ai failover on quota/429
   │     · empty-diff gate: "done" with no diff triggers a budgeted
   │       demand for discriminating evidence
+  │     · mid-run no-edit gate: at half the step budget, a worktree
+  │       with still no changes gets one checkpoint nudge — make a
+  │       first scoped edit, quote no-change evidence, or name the
+  │       blocker — while half the budget remains to act on it
   │     · writes WORKER_REPORT.md + harness-generated machine manifest
-  │     · appends a truncated JSONL transcript
+  │     · appends a truncated, redacted JSONL transcript (UTC
+  │       timestamps, per-step durations, typed tool-error kinds)
   → supervisor collects: reads the manifest against the real diff,
   │   re-runs tests, applies the stale-test protocol
   → commit → rebase onto base → push → PR
