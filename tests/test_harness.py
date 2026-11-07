@@ -269,6 +269,8 @@ class TestCliSurface(TreeCase):
         sup = (out / "backlog-supervisor.rendered.md").read_text()
         self.assertIn("ledger_check.py", sup)
         self.assertIn("grade_run.py", sup)
+        self.assertIn("failover.py", sup)
+        self.assertIn("FLAG FOR ", sup)
         self.assertIn("--max-tokens-out 0", sup)
         self.assertIn("stopped:token-cap", sup)
         self.assertNotIn("{{", sup)
@@ -389,6 +391,110 @@ class TestLedgerCheck(unittest.TestCase):
         self.assertEqual(
             (data["attempts"], data["failed"], data["pr_opened"],
              data["blocked"]), (2, 2, False, True))
+
+
+FAILOVER_LEDGER = [
+    {"ts": "2026-11-06T10:00:00Z", "repo": "beta", "issue": 7,
+     "run_id": "beta-7-a", "tier": "cheap", "tokens_in": 100000,
+     "tokens_out": 10000, "steps": "60/60", "outcome": "failed:bad-diff",
+     "pr_url": "", "gate_triggers": "empty_diff=1", "grade": 30},
+    {"ts": "2026-11-06T11:00:00Z", "repo": "beta", "issue": 7,
+     "run_id": "beta-7-b", "tier": "balanced", "tokens_in": 100000,
+     "tokens_out": 10000, "steps": "45/60",
+     "outcome": "failed:worker-error", "pr_url": "",
+     "gate_triggers": "", "grade": 40},
+    {"ts": "2026-11-06T12:00:00Z", "repo": "beta", "issue": 7,
+     "run_id": "beta-7-c", "tier": "flagship", "tokens_in": 100000,
+     "tokens_out": 10000, "steps": "60/60", "outcome": "escalated",
+     "pr_url": "", "gate_triggers": "", "grade": 20},
+    {"ts": "2026-11-06T10:00:00Z", "repo": "beta", "issue": 8,
+     "run_id": "beta-8-a", "tier": "balanced", "tokens_in": 100000,
+     "tokens_out": 10000, "steps": "60/60", "outcome": "failed:empty-diff",
+     "pr_url": "", "gate_triggers": "empty_diff=1", "grade": 10},
+    {"ts": "2026-11-06T10:00:00Z", "repo": "beta", "issue": 9,
+     "run_id": "beta-9-a", "tier": "balanced", "tokens_in": 100000,
+     "tokens_out": 200000, "steps": "30/60",
+     "outcome": "stopped:token-cap", "pr_url": "",
+     "gate_triggers": "", "grade": None},
+    {"ts": "2026-11-06T10:00:00Z", "repo": "beta", "issue": 10,
+     "run_id": "beta-10-a", "tier": "cheap", "tokens_in": 100000,
+     "tokens_out": 10000, "steps": "55/60", "outcome": "stale",
+     "pr_url": "", "gate_triggers": "", "grade": 30},
+]
+
+
+class TestFailover(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="pc-failover-"))
+        self.ledger = self.tmp / "worker_ledger.jsonl"
+        rows = SYNTH_LEDGER + FAILOVER_LEDGER
+        self.ledger.write_text("\n".join(
+            json.dumps(r) for r in rows) + "\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def run_failover(self, *argv):
+        return subprocess.run(
+            [sys.executable, str(REPO / "bin" / "failover.py"), *argv,
+             "--ledger", str(self.ledger)],
+            capture_output=True, text=True, timeout=60)
+
+    def test_failover_after_two_failures_bumps_tier(self):
+        r = self.run_failover("alpha", "2", "--json")
+        self.assertEqual(r.returncode, 0)
+        data = json.loads(r.stdout)
+        self.assertEqual(data["action"], "failover")
+        self.assertEqual(data["next_tier"], "flagship")
+        self.assertEqual(data["graded_failures"], 2)
+        self.assertEqual(len(data["reflections"]), 2)
+        self.assertIn("REFLECTION alpha#2", data["reflections"][0]["text"])
+
+    def test_flag_for_operator_after_three_failures(self):
+        r = self.run_failover("beta", "7")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("FLAG FOR OPERATOR", r.stdout)
+
+    def test_one_failure_dispatches_with_reflection(self):
+        r = self.run_failover("beta", "8", "--json")
+        self.assertEqual(r.returncode, 0)
+        data = json.loads(r.stdout)
+        self.assertEqual(data["action"], "dispatch_with_reflection")
+        self.assertIn("no-output", data["reflections"][0]["category"])
+
+    def test_token_cap_is_reflection_not_failure(self):
+        r = self.run_failover("beta", "9", "--json")
+        self.assertEqual(r.returncode, 0)
+        data = json.loads(r.stdout)
+        self.assertEqual(data["graded_failures"], 0)
+        self.assertEqual(data["action"], "dispatch")
+        self.assertEqual(len(data["reflections"]), 1)
+        self.assertIn("budget-exhaustion",
+                      data["reflections"][0]["category"])
+
+    def test_low_grade_row_counts_as_graded_failure(self):
+        r = self.run_failover("beta", "10", "--json")
+        data = json.loads(r.stdout)
+        self.assertEqual(data["graded_failures"], 1)
+        self.assertEqual(data["action"], "dispatch_with_reflection")
+
+    def test_pr_opened_disables_failover(self):
+        r = self.run_failover("alpha", "1", "--json")
+        data = json.loads(r.stdout)
+        self.assertEqual(data["action"], "none_pr_opened")
+
+    def test_unknown_issue_dispatches(self):
+        r = self.run_failover("beta", "99", "--json")
+        data = json.loads(r.stdout)
+        self.assertEqual(data["action"], "dispatch")
+        self.assertEqual(data["next_tier"], "balanced")
+
+    def test_missing_ledger_exits_2(self):
+        r = subprocess.run(
+            [sys.executable, str(REPO / "bin" / "failover.py"),
+             "beta", "1", "--ledger", str(self.tmp / "nope.jsonl")],
+            capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 2)
 
 
 def _synth_transcript(path: Path, steps: list, finished: dict):

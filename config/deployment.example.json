@@ -45,7 +45,17 @@
       "zai"
     ],
     "max_tokens_out": 0,
-    "cycle_tokens_out_budget": 0
+    "cycle_tokens_out_budget": 0,
+    "failover": {
+      "enabled": false,
+      "failure_threshold": 2,
+      "flag_after": 3,
+      "tier_ladder": [
+        "cheap",
+        "balanced",
+        "flagship"
+      ]
+    }
   },
   "providers": {
     "zai": {
