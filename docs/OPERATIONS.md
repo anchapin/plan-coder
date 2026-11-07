@@ -77,7 +77,7 @@ When the queue drains or a PR merges, the shepherd queues the next supervisor cy
 
 ## Self-improvement (weekly tune)
 
-- Inputs: the ledger (aggregated with a script — runs, PR-opened rate by tier/repo, median tokens per PR, outcome histogram, failover frequency) and transcript excerpts for the top 2–3 failure classes, plus 1–2 successful runs for contrast.
+- Inputs: the ledger (aggregated with `bin/trace_summary.py` — runs, PR-opened rate by tier/repo, median tokens per PR, outcome histogram, failover frequency, grade distribution) and transcript excerpts for the top 2–3 failure classes, plus 1–2 successful runs for contrast.
 - **Evidence gate:** every applied change needs evidence from **≥2 distinct worker runs**, cited by run id.
 - Small, safe edits are applied directly: wording clarifications, checklist items, tier-routing tweaks, brief-template additions.
 - **Flagged, never applied autonomously:** restructures, provider/auth changes, parallelism and scheduling changes.

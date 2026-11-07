@@ -44,7 +44,7 @@ backlog issue
 | File | Shape | Role |
 |---|---|---|
 | `workers.json` | one JSON object, one entry per worker slot | Live state: status, repo, issue, branch, workdir, PR, tokens. Read at cycle start; a status protocol (working / collecting / done / failed / escalated / split_suggested) keeps overlapping supervisor cycles from double-collecting |
-| `worker_ledger.jsonl` | append-only, one line per collected worker | The metrics record and the tuning pass's loss signal: ts, repo, issue, tier, providers used, tokens in/out, steps, outcome class, PR url, gate triggers |
+| `worker_ledger.jsonl` | append-only, one line per collected worker | The metrics record and the tuning pass's loss signal: ts, repo, issue, tier, providers used, tokens in/out, steps, outcome class, PR url, gate triggers, grade (0–100 mechanical trajectory score from `bin/grade_run.py`, null when the transcript is missing) |
 | `shepherd.json` | one JSON object | The shepherd's tracked-PR list, rerun/fix-attempt counts, merged history, and the supervisor-trigger marker |
 | `transcripts/<run-id>.jsonl` | one line per worker step, fields truncated | Diagnosis and tuning evidence. Never whole-file reading — grep for the failure, read the surrounding steps |
 | `WORKER_REPORT.md` | per run, inside the worktree | Worker summary **plus** the machine manifest. Deleted before commit; the manifest is what the supervisor actually verifies |

@@ -230,6 +230,17 @@ MIDRUN_GATE_ENABLED = os.environ.get("WORKER_MIDRUN_GATE", "1") == "1"
 
 MIDRUN_GATE_PROMPT = """MID-RUN CHECKPOINT: half your step budget is used and the worktree still has no changes (no diff against the base commit, no new files). Do not spend the remaining steps purely exploring, benchmarking, or planning — runs that reach the step cap still exploring end with an empty diff and are discarded. Choose one now: (1) make the smallest scoped edit that satisfies one acceptance criterion and build from there; (2) if the task genuinely requires no change, run the brief's acceptance/repro commands now and quote the exact commands and output as evidence; or (3) if you are blocked, state exactly what blocks you and finish with that in your summary."""
 
+# Per-run output-token guard (trace-grader spike, 2026-11-07): checked
+# after each step like the step cap. Off by default (0): enable with
+# --max-tokens-out, $WORKER_MAX_TOKENS_OUT, or workers.max_tokens_out
+# in the deployment config. It caps completion tokens only — prompt
+# tokens are dominated by cache reads (a typical run shows ~2.3M in
+# vs ~24k out) and do not separate good runs from bad ones, so they
+# are never capped. A tripped guard stops the run cleanly, marks the
+# report "[stopped: token budget reached]", and is recorded as ledger
+# outcome stopped:token-cap by the supervisor — it is a burn guard
+# against pathological runs, not a quota limit.
+
 
 def _git_out(workdir: str, *args: str) -> str | None:
     """Run a read-only git command in workdir; None on any failure."""
@@ -298,7 +309,8 @@ def _tool_result_kind(result: str) -> str:
 
 
 def _machine_manifest(workdir: str, base: str | None, gate_triggers: int,
-                      midrun_triggers: int = 0) -> str:
+                      midrun_triggers: int = 0,
+                      token_cap: tuple | None = None) -> str:
     """Harness-generated git facts for the supervisor to verify.
     Never model prose: unreadable facts degrade to status unknown with a
     named blocker instead of a fabricated 'ready'."""
@@ -338,6 +350,10 @@ def _machine_manifest(workdir: str, base: str | None, gate_triggers: int,
             lines.append("```")
     lines.append(f"- gate_triggers: empty_diff={gate_triggers}, "
                  f"midrun_no_edit={midrun_triggers}")
+    if token_cap is not None:
+        total_out, cap = token_cap
+        lines.append(f"- token_cap: {'tripped' if total_out >= cap else 'not tripped'} "
+                     f"at {total_out} out (cap {cap})")
     return "\n".join(lines)
 
 
@@ -566,6 +582,11 @@ def main() -> int:
                     help="model tier: cheap = small specified jobs, "
                          "balanced = ordinary issues, flagship = hard work")
     ap.add_argument("--max-steps", type=int, default=40)
+    ap.add_argument("--max-tokens-out", type=int, default=None,
+                    help="stop the run once completion tokens reach this "
+                         "many (0 or omitted = guard off; default comes "
+                         "from $WORKER_MAX_TOKENS_OUT or the deployment "
+                         "config's workers.max_tokens_out)")
     ap.add_argument("--exec-timeout", type=int, default=120)
     ap.add_argument("--run-id", default=None,
                     help="run identifier, used for the transcript log filename "
@@ -624,6 +645,21 @@ def main() -> int:
 
     run_started = time.monotonic()
 
+    # Token-out guard resolution: CLI wins, then env, then config; 0 = off.
+    if args.max_tokens_out is not None:
+        max_tokens_out = args.max_tokens_out
+    elif os.environ.get("WORKER_MAX_TOKENS_OUT"):
+        try:
+            max_tokens_out = int(os.environ["WORKER_MAX_TOKENS_OUT"])
+        except ValueError:
+            max_tokens_out = 0
+    else:
+        try:
+            max_tokens_out = int(
+                _cfg("workers", "max_tokens_out", default=0) or 0)
+        except (TypeError, ValueError):
+            max_tokens_out = 0
+
     tlog({"event": "started", "run_id": run_id, "tier": tier,
           "chain": [f"{n}/{m}" for n, _, m in chain]})
 
@@ -644,6 +680,7 @@ def main() -> int:
     gate_triggers = 0
     gate_rounds_used = 0
     midrun_triggers = 0
+    token_cap_tripped = False
     midrun_step = max(1, args.max_steps // 2)
     # Pin the base commit before the worker touches anything: the
     # empty-diff gate and the machine manifest measure against this.
@@ -714,6 +751,18 @@ def main() -> int:
             final_text = f"WORKER ABORTED: {exc}"
             hit_max_steps = False
             break
+        # Token-out guard: checked after every step like the step cap.
+        # Tripping stops the run cleanly — no more model calls, the
+        # report is still written (marked), and no PR is opened by
+        # this process (it never opens PRs; the supervisor records
+        # the outcome as stopped:token-cap).
+        if max_tokens_out and total_out >= max_tokens_out:
+            token_cap_tripped = True
+            tlog({"step": step, "event": "token_cap",
+                  "total_out": total_out, "cap": max_tokens_out})
+            final_text += "\n\n[stopped: token budget reached]"
+            hit_max_steps = False
+            break
         if keep_going:
             # Mid-run no-edit gate: at the halfway point, a worktree
             # with still no changes gets one checkpoint nudge while
@@ -756,7 +805,9 @@ def main() -> int:
         f"- Commands run: {len(worker.commands)}\n\n"
         f"## Summary\n\n{final_text}\n\n"
         + _machine_manifest(workdir, base_commit, gate_triggers,
-                            midrun_triggers)
+                            midrun_triggers,
+                            token_cap=((total_out, max_tokens_out)
+                                     if max_tokens_out else None))
         + "\n"
     )
     with open(os.path.join(workdir, "WORKER_REPORT.md"), "w", encoding="utf-8") as fh:
@@ -767,7 +818,9 @@ def main() -> int:
           "files_changed": worker.files_changed,
           "commands_run": len(worker.commands),
           "gate_triggers": gate_triggers,
-          "midrun_gate_triggers": midrun_triggers})
+          "midrun_gate_triggers": midrun_triggers,
+          "token_cap": token_cap_tripped,
+          "max_tokens_out": max_tokens_out})
     _tlog.close()
     print(report)
     return 0
