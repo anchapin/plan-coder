@@ -39,7 +39,10 @@ FULL_CONFIG = {
                    "merge_order_example": "", "memory_note": "",
                    "auth_note": ""},
     "workers": {"max_steps": 60, "provider_order": ["minimax", "zai"],
-                "max_tokens_out": 0, "cycle_tokens_out_budget": 0},
+                "max_tokens_out": 0, "cycle_tokens_out_budget": 0,
+                "goldfish": {"enabled": True, "max_per_cycle": 2,
+                             "max_tokens_out": 30000, "max_steps": 15,
+                             "tier": "cheap", "max_scope_files": 5}},
     "providers": {
         "zai": {"env_key": "ZAI_API_KEY", "credential": "custom.zai"},
         "minimax": {"env_key": "MINIMAX_API_KEY",
@@ -270,6 +273,8 @@ class TestCliSurface(TreeCase):
         self.assertIn("ledger_check.py", sup)
         self.assertIn("grade_run.py", sup)
         self.assertIn("failover.py", sup)
+        self.assertIn("goldfish.py", sup)
+        self.assertIn("goldfish_ledger.jsonl", sup)
         self.assertIn("FLAG FOR ", sup)
         self.assertIn("--max-tokens-out 0", sup)
         self.assertIn("stopped:token-cap", sup)
@@ -495,6 +500,166 @@ class TestFailover(unittest.TestCase):
              "beta", "1", "--ledger", str(self.tmp / "nope.jsonl")],
             capture_output=True, text=True, timeout=60)
         self.assertEqual(r.returncode, 2)
+
+
+class TestGoldfish(TreeCase):
+    def run_goldfish(self, *argv, env=None):
+        return self.run_bin("goldfish.py", *argv, env=env)
+
+    def test_check_flagship_triggers(self):
+        r = self.run_goldfish("check", "--repo", "alpha", "--issue", "5",
+                              "--tier", "flagship", "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        data = json.loads(r.stdout)
+        self.assertTrue(data["triggered"])
+        self.assertEqual(data["trigger"], "flagship")
+
+    def test_check_balanced_small_scope_no_trigger(self):
+        r = self.run_goldfish("check", "--repo", "alpha", "--issue", "5",
+                              "--tier", "balanced", "--scope-files", "2",
+                              "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        data = json.loads(r.stdout)
+        self.assertFalse(data["triggered"])
+
+    def test_check_failover_and_scope_and_criteria_triggers(self):
+        r = self.run_goldfish("check", "--repo", "alpha", "--issue", "5",
+                              "--tier", "balanced",
+                              "--failover-action", "failover", "--json")
+        self.assertEqual(json.loads(r.stdout)["trigger"], "failover")
+        r = self.run_goldfish("check", "--repo", "alpha", "--issue", "5",
+                              "--tier", "balanced", "--scope-files", "9",
+                              "--json")
+        self.assertEqual(json.loads(r.stdout)["trigger"], "scope")
+        r = self.run_goldfish("check", "--repo", "alpha", "--issue", "5",
+                              "--tier", "balanced", "--has-criteria", "no",
+                              "--json")
+        self.assertEqual(json.loads(r.stdout)["trigger"], "no-criteria")
+        r = self.run_goldfish(
+            "check", "--repo", "alpha", "--issue", "5", "--tier",
+            "balanced", "--scope-paths", ".github/workflows/ci.yml,src/a.py",
+            "--json")
+        self.assertEqual(json.loads(r.stdout)["trigger"], "hard-stop")
+
+    def test_check_disabled_config_exits_2(self):
+        disabled = self.tmp / "goldfish-off.json"
+        disabled.write_text(json.dumps(
+            {"workers": {"goldfish": {"enabled": False}}}))
+        r = self.run_goldfish(
+            "check", "--repo", "alpha", "--issue", "5", "--tier",
+            "flagship", env=self.env(PLAN_CODER_CONFIG=str(disabled)))
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("disabled", r.stderr)
+
+    def _packet_inputs(self, brief_text="Brief body."):
+        base = self.tmp / "gf-base"
+        base.mkdir(exist_ok=True)
+        (base / "real.py").write_text("x = 1\n")
+        issue = self.tmp / "gf-issue.md"
+        issue.write_text("Issue title\n\nDo the thing.\n")
+        brief = self.tmp / "gf-brief.md"
+        brief.write_text(brief_text)
+        return base, issue, brief
+
+    def test_packet_builds_and_filters_reading_list(self):
+        base, issue, brief = self._packet_inputs()
+        out = self.tmp / "gf-packet.md"
+        r = self.run_goldfish(
+            "packet", "--repo", "alpha", "--issue", "5",
+            "--issue-file", str(issue), "--brief-file", str(brief),
+            "--base-dir", str(base), "--reading", "real.py,missing.py",
+            "--out", str(out), "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        manifest = json.loads(r.stdout)
+        self.assertEqual(manifest["reading_list"], ["real.py"])
+        self.assertEqual(manifest["excluded_reading"], ["missing.py"])
+        text = out.read_text()
+        self.assertIn("goldfish-manifest:", text)
+        self.assertIn("Do the thing.", text)
+        self.assertIn("goldfish-findings", text)
+
+    def test_packet_rejects_supervisor_context_markers(self):
+        base, issue, brief = self._packet_inputs(
+            brief_text="## Prior attempts\n\nSee worker_ledger.jsonl.\n")
+        out = self.tmp / "gf-packet-bad.md"
+        r = self.run_goldfish(
+            "packet", "--repo", "alpha", "--issue", "5",
+            "--issue-file", str(issue), "--brief-file", str(brief),
+            "--base-dir", str(base), "--out", str(out))
+        self.assertEqual(r.returncode, 3)
+        self.assertIn("PACKET REJECTED", r.stderr)
+        self.assertFalse(out.exists())
+
+    def test_parse_discards_evidenceless_and_invalid_findings(self):
+        report = self.tmp / "gf-report.md"
+        findings = [
+            {"severity": "Blocker", "lens": "premise",
+             "evidence": "src/a.py:12", "finding": "File does not exist",
+             "suggested_edit": "Fix the path"},
+            {"severity": "Major", "lens": "completeness",
+             "evidence": "", "finding": "Vague worry",
+             "suggested_edit": "none"},
+            {"severity": "Huge", "lens": "premise",
+             "evidence": "src/a.py:1", "finding": "Bad severity",
+             "suggested_edit": "none"},
+        ]
+        report.write_text(
+            "# Report\n\n```goldfish-findings\n"
+            + json.dumps(findings) + "\n```\n")
+        r = self.run_goldfish("parse", "--report", str(report), "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        data = json.loads(r.stdout)
+        self.assertTrue(data["block_found"])
+        self.assertEqual(len(data["findings"]), 1)
+        self.assertEqual(data["findings"][0]["severity"], "Blocker")
+        self.assertEqual(data["discarded_no_evidence"], 1)
+        self.assertEqual(data["invalid"], 1)
+
+    def test_parse_minor_severity_aliases_to_nit(self):
+        # Phase 0b calibration: reviewers improvise "Minor" for the
+        # lowest severity; the parser accepts it as Nit.
+        report = self.tmp / "gf-report-minor.md"
+        findings = [
+            {"severity": "Minor", "lens": "premise",
+             "evidence": "src/a.py:3", "finding": "Wording is off",
+             "suggested_edit": "none"},
+        ]
+        report.write_text(
+            "# Report\n\n```goldfish-findings\n"
+            + json.dumps(findings) + "\n```\n")
+        r = self.run_goldfish("parse", "--report", str(report), "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        data = json.loads(r.stdout)
+        self.assertEqual(len(data["findings"]), 1)
+        self.assertEqual(data["findings"][0]["severity"], "Nit")
+        self.assertEqual(data["invalid"], 0)
+
+    def test_parse_without_block_is_empty(self):
+        report = self.tmp / "gf-report2.md"
+        report.write_text("# Report\n\nNo findings block here.\n")
+        r = self.run_goldfish("parse", "--report", str(report), "--json")
+        data = json.loads(r.stdout)
+        self.assertFalse(data["block_found"])
+        self.assertEqual(data["findings"], [])
+
+    def test_log_appends_goldfish_ledger_row(self):
+        ledger = self.tmp / "goldfish_ledger.jsonl"
+        r = self.run_goldfish(
+            "log", "--repo", "alpha", "--issue", "5", "--trigger",
+            "flagship", "--tokens-out", "12345", "--steps", "9/15",
+            "--findings", "3", "--blockers", "1", "--propose-fix", "2",
+            "--contest", "1", "--escalate", "0", "--decline", "0",
+            "--discarded", "1", "--brief-changed", "yes", "--outcome",
+            "dispatched_revised", "--ledger", str(ledger), "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        row = json.loads(ledger.read_text().strip())
+        self.assertEqual(row["repo"], "alpha")
+        self.assertEqual(row["trigger"], "flagship")
+        self.assertEqual(row["tier"], "cheap")
+        self.assertTrue(row["brief_changed"])
+        self.assertEqual(row["dispositions"]["propose_fix"], 2)
+        self.assertEqual(row["dispositions"]["discarded_no_evidence"], 1)
+        self.assertEqual(row["outcome"], "dispatched_revised")
 
 
 def _synth_transcript(path: Path, steps: list, finished: dict):

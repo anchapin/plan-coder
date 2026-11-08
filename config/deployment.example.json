@@ -1,5 +1,5 @@
 {
-  "_about": "Deployment configuration for plan-coder. Copy this file to deployment.local.json in the same directory and fill in your real values. deployment.local.json is gitignored and is the version actually used: bin/agent.py reads it at startup (credential-helper labels, transcript directory) and bin/render_prompts.py renders the prompt templates in prompts/ with it into local/ (also gitignored). Search order for the config: $PLAN_CODER_CONFIG, then config/deployment.local.json relative to the repo root, then ~/.plan-coder/deployment.json. Every field is optional; built-in defaults cover a standalone env-key setup. workers.max_tokens_out (0 = off) caps completion tokens per worker run and workers.cycle_tokens_out_budget (0 = off) caps completion tokens collected per supervisor cycle; both are pathological-burn guards, not quota limits — set them above the p99 of measured runs (see bin/trace_summary.py).",
+  "_about": "Deployment configuration for plan-coder. Copy this file to deployment.local.json in the same directory and fill in your real values. deployment.local.json is gitignored and is the version actually used: bin/agent.py reads it at startup (credential-helper labels, transcript directory) and bin/render_prompts.py renders the prompt templates in prompts/ with it into local/ (also gitignored). Search order for the config: $PLAN_CODER_CONFIG, then config/deployment.local.json relative to the repo root, then ~/.plan-coder/deployment.json. Every field is optional; built-in defaults cover a standalone env-key setup. workers.max_tokens_out (0 = off) caps completion tokens per worker run and workers.cycle_tokens_out_budget (0 = off) caps completion tokens collected per supervisor cycle; both are pathological-burn guards, not quota limits \u2014 set them above the p99 of measured runs (see bin/trace_summary.py).",
   "operator": {
     "name": "Your Name",
     "flag_label": "NEEDS HUMAN"
@@ -55,6 +55,15 @@
         "balanced",
         "flagship"
       ]
+    },
+    "goldfish": {
+      "_about": "Goldfish brief-review spike (EGM pattern): zero-context cheap-tier review of triggered supervisor briefs before dispatch. Ships disabled; enabling is a separate operator decision. max_scope_files is the scope trigger threshold; goldfish tokens count inside the cycle budget.",
+      "enabled": false,
+      "max_per_cycle": 2,
+      "max_tokens_out": 30000,
+      "max_steps": 25,
+      "tier": "cheap",
+      "max_scope_files": 5
     }
   },
   "providers": {
