@@ -22,6 +22,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -418,11 +419,29 @@ class Worker:
             text = text[:12000] + "\n...[truncated]"
         return f"{path} (lines {offset}-{offset + len(chunk) - 1} of {len(lines)}):\n{text}"
 
+    @staticmethod
+    def _atomic_write(full: str, content: str) -> None:
+        # Write to a temp file in the same directory and os.replace it
+        # into place, so a failed/interrupted write never leaves the
+        # target truncated (a truncate-in-place open("w") destroyed
+        # files in the 2026-10-26 write fault).
+        directory = os.path.dirname(full) or "."
+        fd, tmp = tempfile.mkstemp(dir=directory, prefix=".agent-write-")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(content)
+            os.replace(tmp, full)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+
     def _write(self, path: str, content: str) -> str:
         full = self._safe(path)
         os.makedirs(os.path.dirname(full) or self.workdir, exist_ok=True)
-        with open(full, "w", encoding="utf-8") as fh:
-            fh.write(content)
+        self._atomic_write(full, content)
         if path not in self.files_changed:
             self.files_changed.append(path)
         return f"wrote {path} ({len(content)} bytes)"
@@ -434,8 +453,7 @@ class Worker:
         if old_text not in content:
             return f"edit failed: old_text not found in {path}"
         content = content.replace(old_text, new_text, 1)
-        with open(full, "w", encoding="utf-8") as fh:
-            fh.write(content)
+        self._atomic_write(full, content)
         if path not in self.files_changed:
             self.files_changed.append(path)
         return f"edited {path}"
