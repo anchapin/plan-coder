@@ -877,5 +877,109 @@ class TestAgentTokenCap(TreeCase):
             self.assertIn(f"driver ok: {mode}", r.stdout)
 
 
+class TestStateWrite(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="pc-state-"))
+        self.dest = self.tmp / "state.json"
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def run_sw(self, *argv):
+        return subprocess.run(
+            [sys.executable, str(REPO / "bin" / "state_write.py"), *argv],
+            capture_output=True, text=True, timeout=60)
+
+    def test_commit_replaces_and_backs_up(self):
+        self.dest.write_text('{"a": 1}\n')
+        staging = self.tmp / "state.json.new"
+        staging.write_text('{"a": 2, "b": [1, 2]}\n')
+        r = self.run_sw("commit", str(staging), str(self.dest), "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(self.dest.read_text()),
+                         {"a": 2, "b": [1, 2]})
+        backups = list(self.tmp.glob("state.json.statebak-*"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(json.loads(backups[0].read_text()), {"a": 1})
+
+    def test_commit_refuses_truncated_staging_and_keeps_dest(self):
+        self.dest.write_text('{"a": 1}\n')
+        staging = self.tmp / "state.json.new"
+        staging.write_text('{"a": 2, "b": [1,')  # truncated mid-write
+        r = self.run_sw("commit", str(staging), str(self.dest))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("REFUSED", r.stderr)
+        self.assertEqual(json.loads(self.dest.read_text()), {"a": 1})
+        self.assertEqual(list(self.tmp.glob("state.json.statebak-*")), [])
+
+    def test_commit_refuses_staging_equals_dest(self):
+        self.dest.write_text('{"a": 1}\n')
+        r = self.run_sw("commit", str(self.dest), str(self.dest))
+        self.assertEqual(r.returncode, 1)
+        self.assertEqual(json.loads(self.dest.read_text()), {"a": 1})
+
+    def test_commit_new_file_no_backup(self):
+        staging = self.tmp / "fresh.json.new"
+        staging.write_text('[1, 2, 3]\n')
+        dest = self.tmp / "fresh.json"
+        r = self.run_sw("commit", str(staging), str(dest))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(dest.read_text()), [1, 2, 3])
+
+    def test_validate_ok_and_invalid(self):
+        self.dest.write_text('{"x": true}\n')
+        r = self.run_sw("validate", str(self.dest), "--json")
+        self.assertEqual(r.returncode, 0)
+        data = json.loads(r.stdout)
+        self.assertEqual((data["valid"], data["type"], data["entries"]),
+                         (True, "object", 1))
+        self.dest.write_text('not json')
+        r = self.run_sw("validate", str(self.dest))
+        self.assertEqual(r.returncode, 1)
+
+
+class TestShepherdLedger(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="pc-shepherd-"))
+        self.ledger = self.tmp / "shepherd_ledger.jsonl"
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def run_sl(self, *argv):
+        return subprocess.run(
+            [sys.executable, str(REPO / "bin" / "shepherd_ledger.py"),
+             *argv, "--ledger", str(self.ledger)],
+            capture_output=True, text=True, timeout=60)
+
+    def test_append_and_summary_counts(self):
+        r = self.run_sl("append", "--repo", "alpha", "--pr", "12",
+                        "--action", "rerun", "--outcome", "flaky")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = self.run_sl("append", "--repo", "alpha", "--pr", "12",
+                        "--action", "merged_by_shepherd",
+                        "--outcome", "merged", "--merge-state", "UNSTABLE")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = self.run_sl("append", "--repo", "beta", "--pr", "3",
+                        "--action", "needs_alex", "--outcome", "physics")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        rows = [json.loads(x) for x in
+                self.ledger.read_text().splitlines()]
+        self.assertEqual(len(rows), 3)
+        self.assertTrue(all("ts" in row for row in rows))
+        r = self.run_sl("summary", "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        # --ledger was appended after --json by run_sl; argparse still parses
+        data = json.loads(r.stdout)
+        self.assertEqual(data["rows"], 3)
+        self.assertEqual(data["merges"], 1)
+        self.assertEqual(data["unstable_merges"], 1)
+        self.assertEqual(data["needs_alex_distinct_prs"], 1)
+
+    def test_summary_missing_ledger_exits_2(self):
+        r = self.run_sl("summary")
+        self.assertEqual(r.returncode, 2)
+
+
 if __name__ == "__main__":
     unittest.main()
