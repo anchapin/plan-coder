@@ -42,7 +42,15 @@ FULL_CONFIG = {
                 "max_tokens_out": 0, "cycle_tokens_out_budget": 0,
                 "goldfish": {"enabled": True, "max_per_cycle": 2,
                              "max_tokens_out": 30000, "max_steps": 15,
-                             "tier": "cheap", "max_scope_files": 5}},
+                             "tier": "cheap", "max_scope_files": 5},
+                "jittest": {"enabled": True, "max_per_cycle": 2,
+                            "hypothesis_tier": "balanced",
+                            "test_tier": "cheap",
+                            "max_tokens_out_hypothesis": 30000,
+                            "max_tokens_out_test": 30000,
+                            "max_steps": 25, "max_files": 5,
+                            "max_diff_lines": 300,
+                            "max_three_state_runs": 3}},
     "providers": {
         "zai": {"env_key": "ZAI_API_KEY", "credential": "custom.zai"},
         "minimax": {"env_key": "MINIMAX_API_KEY",
@@ -279,6 +287,51 @@ class TestCliSurface(TreeCase):
         self.assertIn("--max-tokens-out 0", sup)
         self.assertIn("stopped:token-cap", sup)
         self.assertNotIn("{{", sup)
+
+    def test_render_has_jittest_wiring(self):
+        out = self.tmp / "out-jittest"
+        r = self.run_bin("render_prompts.py", "--out", str(out))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        sup = (out / "backlog-supervisor.rendered.md").read_text()
+        self.assertIn("jittest.py check", sup)
+        self.assertIn("jittest.py packet", sup)
+        self.assertIn("jittest.py launch", sup)
+        self.assertIn("jittest.py parse-hypotheses", sup)
+        self.assertIn("jittest.py three-state", sup)
+        self.assertIn("jittest_ledger.jsonl", sup)
+        self.assertIn("jittest:catch", sup)
+        self.assertNotIn("{{", sup)
+        shep = (out / "pr-shepherd.rendered.md").read_text()
+        self.assertIn("jittest:catch", shep)
+        self.assertIn("NOT merge-eligible", shep)
+        self.assertNotIn("{{", shep)
+
+    def test_render_has_spike_ledger_tune_wiring(self):
+        out = self.tmp / "out-tune-ledgers"
+        r = self.run_bin("render_prompts.py", "--out", str(out))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        tune = (out / "harness-tune.rendered.md").read_text()
+        # Both spike ledgers are in the tune corpus.
+        self.assertIn("goldfish_ledger.jsonl", tune)
+        self.assertIn("jittest_ledger.jsonl", tune)
+        # Goldfish window metrics: acceptance, overhead, unavailable,
+        # brief_changed + downstream join.
+        self.assertIn("findings acceptance", tune)
+        self.assertIn("propose_fix", tune)
+        self.assertIn("unavailable rate", tune)
+        self.assertIn("brief_changed", tune)
+        self.assertIn("downstream join", tune)
+        # JiTTest window metrics: latest-row collapse, label
+        # adjudication, disposition true-positive rate, Stage A kill
+        # rate, survived / catch_flagged counts.
+        self.assertIn("latest row per repo + PR", tune)
+        self.assertIn("label_adjudication", tune)
+        self.assertIn("disputed", tune)
+        self.assertIn("true-positive", tune)
+        self.assertIn("Stage A kill rate", tune)
+        self.assertIn("catch_flagged", tune)
+        self.assertIn("coverage_incomplete", tune)
+        self.assertNotIn("{{", tune)
 
 
 SYNTH_LEDGER = [
@@ -660,6 +713,518 @@ class TestGoldfish(TreeCase):
         self.assertEqual(row["dispositions"]["propose_fix"], 2)
         self.assertEqual(row["dispositions"]["discarded_no_evidence"], 1)
         self.assertEqual(row["outcome"], "dispatched_revised")
+
+
+JIT_DIFF_PY = """diff --git a/src/widget.py b/src/widget.py
+--- a/src/widget.py
++++ b/src/widget.py
+@@ -1,3 +1,4 @@
+ def compute_total(items):
+     total = sum(items)
+-    return total
++    return total + 1
++# trailing comment
+"""
+
+JIT_DIFF_PY_TRUNCATED = """diff --git a/src/widget.py b/src/widget.py
+--- a/src/widget.py
++++ b/src/widget.py
+@@ -1,3 +1,4 @@
+ def compute_total(items):
+     total = sum(items)
+-    return total
++    return total + 1
+"""
+
+JIT_DIFF_FORMAT = """diff --git a/data/points.parquet b/data/points.parquet
+--- a/data/points.parquet
++++ b/data/points.parquet
+@@ -1,1 +1,1 @@
+-old-bytes
++new-bytes
+"""
+
+JIT_DIFF_PHYSICS = """diff --git a/src/physics/model.py b/src/physics/model.py
+--- a/src/physics/model.py
++++ b/src/physics/model.py
+@@ -1,1 +1,1 @@
+-old
++new
+"""
+
+
+class TestJittest(TreeCase):
+    def run_jittest(self, *argv, env=None):
+        return self.run_bin("jittest.py", *argv, env=env)
+
+    # ---------------------------------------------------------- check
+
+    def test_check_flagship_and_small_no_trigger(self):
+        r = self.run_jittest("check", "--repo", "alpha", "--issue",
+                             "5", "--pr", "9", "--tier", "flagship",
+                             "--diff-files", "2", "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        data = json.loads(r.stdout)
+        self.assertTrue(data["triggered"])
+        self.assertEqual(data["trigger"], "flagship")
+        r = self.run_jittest("check", "--repo", "alpha", "--issue",
+                             "5", "--pr", "9", "--tier", "balanced",
+                             "--diff-files", "2", "--diff-lines",
+                             "40", "--json")
+        self.assertFalse(json.loads(r.stdout)["triggered"])
+
+    def test_check_trigger_variants(self):
+        def trigger(**kw):
+            argv = ["check", "--repo", "alpha", "--issue", "5",
+                    "--pr", "9", "--tier", "balanced"]
+            for key, value in kw.items():
+                argv += ["--" + key.replace("_", "-"), str(value)]
+            argv.append("--json")
+            r = self.run_jittest(*argv)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            return json.loads(r.stdout)
+        self.assertEqual(trigger(diff_paths=".github/workflows/ci.yml"
+                                 )["trigger"], "hard-stop")
+        self.assertEqual(trigger(failover_action="failover"
+                                 )["trigger"], "failover")
+        self.assertEqual(trigger(diff_files=6)["trigger"], "size")
+        self.assertEqual(trigger(diff_lines=301)["trigger"], "size")
+        self.assertEqual(trigger(grade_band="bottom"
+                                 )["trigger"], "lucky-green")
+
+    def test_check_exemptions_and_cycle_cap(self):
+        def check(**kw):
+            argv = ["check", "--repo", "alpha", "--issue", "5",
+                    "--pr", "9", "--tier", "flagship"]
+            for key, value in kw.items():
+                argv += ["--" + key.replace("_", "-"), str(value)]
+            argv.append("--json")
+            return json.loads(self.run_jittest(*argv).stdout)
+        data = check(diff_paths="docs/guide.md,README.md")
+        self.assertFalse(data["triggered"])
+        self.assertEqual(data["exempt"], "docs-only")
+        data = check(diff_paths="tests/test_a.py,src/b.test.ts")
+        self.assertEqual(data["exempt"], "test-only")
+        data = check(has_regression_test="yes")
+        self.assertEqual(data["exempt"], "has-regression-test")
+        data = check(cycle_checks_used=2)
+        self.assertFalse(data["triggered"])
+        self.assertEqual(data["exempt"], "cycle-cap")
+
+    def test_check_disabled_config_exits_2(self):
+        disabled = self.tmp / "jittest-off.json"
+        disabled.write_text(json.dumps(
+            {"workers": {"jittest": {"enabled": False}}}))
+        r = self.run_jittest(
+            "check", "--repo", "alpha", "--issue", "5", "--pr", "9",
+            "--tier", "flagship",
+            env=self.env(PLAN_CODER_CONFIG=str(disabled)))
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("disabled", r.stderr)
+
+    # --------------------------------------------------------- packet
+
+    def _packet_inputs(self, diff_text=JIT_DIFF_PY):
+        issue = self.tmp / "jit-issue.md"
+        issue.write_text("Fix the total\n\nThe total must equal "
+                         "the sum of the items.\n")
+        pr = self.tmp / "jit-pr.md"
+        pr.write_text("Implements the fix.\n")
+        diff = self.tmp / "jit.diff"
+        diff.write_text(diff_text)
+        return issue, pr, diff
+
+    def test_packet_builds_full_diff_and_coverage_seed(self):
+        issue, pr, diff = self._packet_inputs()
+        out = self.tmp / "jit-packet.md"
+        r = self.run_jittest(
+            "packet", "--repo", "alpha", "--issue", "5", "--pr",
+            "9", "--issue-file", str(issue), "--pr-file", str(pr),
+            "--diff-file", str(diff), "--out", str(out), "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        manifest = json.loads(r.stdout)
+        self.assertFalse(manifest["diff_truncated"])
+        funcs = [cf["function"]
+                 for cf in manifest["changed_functions"]]
+        self.assertIn("compute_total", funcs)
+        text = out.read_text()
+        self.assertIn("jittest-manifest:", text)
+        self.assertIn("+    return total + 1", text)
+        self.assertIn("COVERAGE:", text)
+        self.assertIn("FIRST-TOOL-CALL RULE", text)
+
+    def test_packet_rejects_truncated_diff(self):
+        issue, pr, diff = self._packet_inputs(JIT_DIFF_PY_TRUNCATED)
+        out = self.tmp / "jit-packet-trunc.md"
+        r = self.run_jittest(
+            "packet", "--repo", "alpha", "--issue", "5", "--pr",
+            "9", "--issue-file", str(issue), "--pr-file", str(pr),
+            "--diff-file", str(diff), "--out", str(out))
+        self.assertEqual(r.returncode, 3)
+        self.assertIn("PACKET REJECTED", r.stderr)
+        self.assertFalse(out.exists())
+
+    def test_packet_includes_contract_for_format_diff(self):
+        base = self.tmp / "jit-fmt-base"
+        (base / "data").mkdir(parents=True)
+        (base / "points-schema.md").write_text(
+            "POINTS FORMAT CONTRACT: columns are x, y, width, "
+            "height in COCO order.\n")
+        issue, pr, diff = self._packet_inputs(JIT_DIFF_FORMAT)
+        out = self.tmp / "jit-packet-fmt.md"
+        r = self.run_jittest(
+            "packet", "--repo", "alpha", "--issue", "5", "--pr",
+            "9", "--issue-file", str(issue), "--pr-file", str(pr),
+            "--diff-file", str(diff), "--base-dir", str(base),
+            "--out", str(out), "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        manifest = json.loads(r.stdout)
+        self.assertEqual(manifest["format_files"],
+                         ["data/points.parquet"])
+        self.assertTrue(any("points-schema" in p
+                            for p in manifest["contract_included"]))
+        text = out.read_text()
+        self.assertIn("External contract material", text)
+        self.assertIn("COCO order", text)
+
+    # ---------------------------------------------- parse-hypotheses
+
+    def _hyp_workdir(self):
+        wt = self.tmp / "jit-hyp-wt"
+        (wt / "src").mkdir(parents=True, exist_ok=True)
+        (wt / "src" / "widget.py").write_text(
+            "def compute_total(items):\n"
+            "    total = sum(items)\n"
+            "    return total + 1\n")
+        report = self.tmp / "jit-HYPOTHESES.md"
+        report.write_text(
+            "# Hypotheses — alpha PR #9\n\n"
+            "## H1\n"
+            "CLAIM: compute_total adds one to every total\n"
+            "CLASS: facet\n"
+            'EVIDENCE: "return total + 1" — src/widget.py:3\n'
+            "FALSIFIED_BY: compute_total([1, 2]) observes 4, "
+            "not 3\n"
+            "CONFIDENCE: high\n"
+            "COVERAGE: compute_total: covered\n\n"
+            "## H2\n"
+            "CLAIM: an unquotable worry\n"
+            "CLASS: edge\n"
+            "CONFIDENCE: low\n\n"
+            "## H3\n"
+            "CLAIM: a fabricated quote claim\n"
+            "CLASS: seam\n"
+            'EVIDENCE: "this line does not exist" — '
+            "src/widget.py:1\n"
+            "FALSIFIED_BY: nothing\n"
+            "CONFIDENCE: low\n\n"
+            "RANKED: H1, H3, H2\n")
+        return wt, report
+
+    def test_parse_hypotheses_evidence_gate_and_coverage(self):
+        wt, report = self._hyp_workdir()
+        diff = self.tmp / "jit-hyp.diff"
+        diff.write_text(JIT_DIFF_PY)
+        r = self.run_jittest(
+            "parse-hypotheses", "--report", str(report),
+            "--workdir", str(wt), "--diff-file", str(diff),
+            "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        data = json.loads(r.stdout)
+        self.assertEqual(data["n_hypotheses"], 1)
+        self.assertEqual(data["hypotheses"][0]["id"], "H1")
+        self.assertEqual(data["discarded_no_evidence"], 1)
+        self.assertEqual(data["discarded_unverifiable"], 1)
+        self.assertTrue(data["coverage_complete"])
+        self.assertEqual(data["coverage"][0]["status"], "covered")
+
+    def test_parse_hypotheses_flags_unaccounted_function(self):
+        wt, report = self._hyp_workdir()
+        r = self.run_jittest(
+            "parse-hypotheses", "--report", str(report),
+            "--workdir", str(wt),
+            "--changed-functions", "compute_total,missing_func",
+            "--json")
+        data = json.loads(r.stdout)
+        self.assertFalse(data["coverage_complete"])
+        self.assertIn("missing_func",
+                      data["unaccounted_functions"])
+
+    # ---------------------------------------------------- three-state
+
+    def _three_state_dirs(self, name, diff_test, verify_test=None,
+                          diff_state=None, verify_state=None):
+        dw = self.tmp / f"jit-{name}-diff"
+        vw = self.tmp / f"jit-{name}-verify"
+        dw.mkdir(parents=True, exist_ok=True)
+        vw.mkdir(parents=True, exist_ok=True)
+        (dw / "test_probe.py").write_text(diff_test)
+        if verify_test is not None:
+            (vw / "test_probe.py").write_text(verify_test)
+        if diff_state is not None:
+            (dw / "state.txt").write_text(diff_state)
+        if verify_state is not None:
+            (vw / "state.txt").write_text(verify_state)
+        return dw, vw
+
+    def _run_three_state(self, dw, vw):
+        out = Path(str(dw) + "-threestate.json")
+        r = self.run_jittest(
+            "three-state", "--test-path", "test_probe.py",
+            "--diff-workdir", str(dw), "--verify-workdir", str(vw),
+            "--out", str(out), "--json", "--cmd", sys.executable,
+            "test_probe.py")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout)
+
+    def test_three_state_catch(self):
+        probe = ("import sys\n"
+                 "sys.exit(1 if open('state.txt').read().strip()"
+                 " == 'buggy' else 0)\n")
+        dw, vw = self._three_state_dirs("catch", probe,
+                                        diff_state="buggy\n",
+                                        verify_state="fixed\n")
+        data = self._run_three_state(dw, vw)
+        self.assertEqual(data["classification"], "catch")
+        self.assertTrue(data["three_state_pass"])
+        self.assertEqual(data["executions"], 3)
+        self.assertTrue(data["copied_to_verify"])
+
+    def test_three_state_fail_on_both_and_pass_on_both(self):
+        dw, vw = self._three_state_dirs(
+            "failboth", "import sys\nsys.exit(1)\n",
+            verify_test="import sys\nsys.exit(1)\n")
+        self.assertEqual(self._run_three_state(dw, vw)
+                         ["classification"], "fail_on_both")
+        dw, vw = self._three_state_dirs(
+            "passboth", "import sys\nsys.exit(0)\n",
+            verify_test="import sys\nsys.exit(0)\n")
+        self.assertEqual(self._run_three_state(dw, vw)
+                         ["classification"], "pass_on_both")
+
+    def test_three_state_feature_test_pattern(self):
+        probe = ("import sys\n"
+                 "sys.exit(0 if open('state.txt').read().strip()"
+                 " == 'buggy' else 1)\n")
+        dw, vw = self._three_state_dirs("feature", probe,
+                                        diff_state="buggy\n",
+                                        verify_state="fixed\n")
+        self.assertEqual(self._run_three_state(dw, vw)
+                         ["classification"], "feature_test")
+
+    def test_three_state_flake_on_rerun(self):
+        counter = ("import os, sys\n"
+                   "n = int(open('count.txt').read()) "
+                   "if os.path.exists('count.txt') else 0\n"
+                   "open('count.txt', 'w').write(str(n + 1))\n"
+                   "sys.exit(1 if n == 0 else 0)\n")
+        dw, vw = self._three_state_dirs(
+            "flake", counter,
+            verify_test="import sys\nsys.exit(0)\n")
+        self.assertEqual(self._run_three_state(dw, vw)
+                         ["classification"], "flake")
+
+    # --------------------------------------------------------- assess
+
+    def _assess(self, test_text, three_state=None, judge=None,
+                extra_argv=()):
+        test_file = self.tmp / "jit-assess-test.py"
+        test_file.write_text(test_text)
+        argv = ["assess", "--test-file", str(test_file)]
+        if three_state is not None:
+            ts_file = self.tmp / "jit-assess-ts.json"
+            ts_file.write_text(json.dumps(three_state))
+            argv += ["--three-state-file", str(ts_file)]
+        if judge is not None:
+            judge_file = self.tmp / "jit-assess-judge.md"
+            judge_file.write_text(judge)
+            argv += ["--judge-file", str(judge_file)]
+        argv += list(extra_argv) + ["--json"]
+        r = self.run_jittest(*argv)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout)
+
+    _CATCH_TS = {"classification": "catch",
+                 "buggy_run1": {"exit": 1,
+                                "output": "1 failed: assert 4 == 3"},
+                 "buggy_run2": {"exit": 1,
+                                "output": "1 failed: assert 4 == 3"},
+                 "verify_run": {"exit": 0, "output": "1 passed"}}
+
+    def test_assess_env_failure_killed_stage_a(self):
+        ts = {"classification": "catch",
+              "buggy_run1": {"exit": 1, "output":
+                             "ModuleNotFoundError: No module "
+                             "named 'nope'"},
+              "verify_run": {"exit": 1, "output":
+                             "ModuleNotFoundError"}}
+        data = self._assess("def test_x():\n    assert True\n",
+                            three_state=ts)
+        self.assertEqual(data["outcome"], "killed_stage_a")
+        rules = [k["rule"] for k in data["stage_a_kills"]]
+        self.assertIn("env_failure", rules)
+
+    def test_assess_exact_float_and_nondeterminism_kills(self):
+        diff = self.tmp / "jit-physics.diff"
+        diff.write_text(JIT_DIFF_PHYSICS)
+        data = self._assess(
+            "import time\n"
+            "def test_model():\n"
+            "    assert energy_out == 1.23456789\n"
+            "    now = time.time()\n",
+            three_state=self._CATCH_TS,
+            extra_argv=("--diff-file", str(diff)))
+        rules = [k["rule"] for k in data["stage_a_kills"]]
+        self.assertIn("exact_float_simulation_output", rules)
+        self.assertIn("nondeterministic_by_construction", rules)
+        self.assertEqual(data["outcome"], "killed_stage_a")
+
+    def test_assess_judge_evidenceless_discarded(self):
+        judge = ("```jittest-judge\n"
+                 + json.dumps({"verdict": "catch", "evidence": ""})
+                 + "\n```\n")
+        data = self._assess(
+            "def test_total():\n"
+            "    assert compute_total([1, 2]) == 3\n",
+            three_state=self._CATCH_TS, judge=judge)
+        self.assertEqual(data["judge"]["discarded_no_evidence"], 1)
+        self.assertEqual(data["outcome"], "pending_judge")
+
+    def test_assess_surviving_catch(self):
+        issue = self.tmp / "jit-assess-issue.md"
+        issue.write_text("The total must equal the sum of the "
+                         "items.\n")
+        judge = ("```jittest-judge\n"
+                 + json.dumps({
+                     "verdict": "catch",
+                     "evidence": "The total must equal the sum "
+                                 "of the items."})
+                 + "\n```\n")
+        data = self._assess(
+            "def test_total():\n"
+            "    assert compute_total([1, 2]) == 3\n",
+            three_state=self._CATCH_TS, judge=judge,
+            extra_argv=("--issue-file", str(issue)))
+        self.assertEqual(data["outcome"], "surviving_catch")
+        self.assertEqual(data["stage_a_kills"], [])
+
+    # -------------------------------------------------------- harvest
+
+    def test_harvest_finds_tests_regardless_of_report_name(self):
+        wt = self.tmp / "jit-harvest-wt"
+        (wt / "tests").mkdir(parents=True)
+        (wt / "src").mkdir()
+        (wt / "tests" / "test_new_thing.py").write_text("x = 1\n")
+        (wt / "src" / "widget.py").write_text("x = 1\n")
+        (wt / "WORKER_REPORT.md").write_text("# done\n")
+        (wt / "HYPOTHESES.md").write_text("# Hypotheses\n")
+        subprocess.run(["git", "init", "-q", str(wt)], check=True)
+        r = self.run_jittest("harvest", "--workdir", str(wt),
+                             "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        data = json.loads(r.stdout)
+        self.assertIn("tests/test_new_thing.py", data["tests"])
+        self.assertNotIn("src/widget.py", data["tests"])
+        self.assertEqual(data["hypotheses_file"], "HYPOTHESES.md")
+        self.assertIn("WORKER_REPORT.md", data["reports"])
+        plain = self.tmp / "jit-harvest-plain"
+        plain.mkdir()
+        (plain / "test_loose.py").write_text("x = 1\n")
+        r = self.run_jittest("harvest", "--workdir", str(plain),
+                             "--json")
+        data = json.loads(r.stdout)
+        self.assertIn("test_loose.py", data["tests"])
+
+    # --------------------------------------------------------- launch
+
+    def _dummy_agent(self, name, body):
+        script = self.tmp / name
+        script.write_text(body)
+        return script
+
+    def test_launch_hard_cap_kills_over_cap_run(self):
+        dummy = self._dummy_agent(
+            "jit-dummy-over.py",
+            "import json, os, sys, time\n"
+            "argv = sys.argv\n"
+            "tdir = argv[argv.index('--transcript-dir') + 1]\n"
+            "rid = argv[argv.index('--run-id') + 1]\n"
+            "os.makedirs(tdir, exist_ok=True)\n"
+            "with open(os.path.join(tdir, rid + '.jsonl'), 'w') "
+            "as fh:\n"
+            "    fh.write(json.dumps({'tokens_out': 5000})"
+            " + '\\n')\n"
+            "time.sleep(60)\n")
+        tdir = self.tmp / "jit-launch-transcripts"
+        r = self.run_jittest(
+            "launch", "--brief", "b.md", "--workdir", str(self.tmp),
+            "--tier", "cheap", "--cap", "1000", "--run-id",
+            "jit-over", "--transcript-dir", str(tdir),
+            "--agent", str(dummy), "--json")
+        self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
+        data = json.loads(r.stdout)
+        self.assertTrue(data["hard_cap_killed"])
+        self.assertEqual(data["tokens_out"], 5000)
+
+    def test_launch_under_cap_finishes(self):
+        dummy = self._dummy_agent(
+            "jit-dummy-ok.py",
+            "import json, os, sys\n"
+            "argv = sys.argv\n"
+            "tdir = argv[argv.index('--transcript-dir') + 1]\n"
+            "rid = argv[argv.index('--run-id') + 1]\n"
+            "os.makedirs(tdir, exist_ok=True)\n"
+            "with open(os.path.join(tdir, rid + '.jsonl'), 'w') "
+            "as fh:\n"
+            "    fh.write(json.dumps({'tokens_out': 10})"
+            " + '\\n')\n")
+        tdir = self.tmp / "jit-launch-transcripts2"
+        r = self.run_jittest(
+            "launch", "--brief", "b.md", "--workdir", str(self.tmp),
+            "--tier", "balanced", "--cap", "30000", "--run-id",
+            "jit-ok", "--transcript-dir", str(tdir),
+            "--agent", str(dummy), "--json")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        data = json.loads(r.stdout)
+        self.assertFalse(data["hard_cap_killed"])
+        self.assertEqual(data["tokens_out"], 10)
+
+    # ------------------------------------------------------------ log
+
+    def test_log_appends_jittest_ledger_row_with_adjudication(self):
+        ledger = self.tmp / "jittest_ledger.jsonl"
+        r = self.run_jittest(
+            "log", "--repo", "alpha", "--issue", "5", "--pr", "9",
+            "--trigger", "flagship", "--outcome", "catch_flagged",
+            "--hypotheses-produced", "5", "--hypotheses-kept", "4",
+            "--discarded-no-evidence", "1",
+            "--coverage-complete", "yes", "--tests-generated", "1",
+            "--three-state-passed", "1",
+            "--three-state-class", "catch",
+            "--killed-stage-a", "env_failure=1",
+            "--judge-catch", "1", "--survived", "1",
+            "--tokens-out", "54321",
+            "--label-ground-truth", "clean",
+            "--label-adjudicated-by", "operator",
+            "--label-note", "survivor was a real defect; label "
+            "adjudicated before scoring",
+            "--ledger", str(ledger), "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        row = json.loads(ledger.read_text().strip())
+        self.assertEqual(row["repo"], "alpha")
+        self.assertEqual(row["pr"], 9)
+        self.assertEqual(row["trigger"], "flagship")
+        self.assertEqual(row["hypotheses"]["kept"], 4)
+        self.assertTrue(row["hypotheses"]["coverage_complete"])
+        self.assertEqual(row["killed_stage_a"],
+                         {"env_failure": 1})
+        self.assertEqual(row["judge"]["catch"], 1)
+        self.assertEqual(row["survived"], 1)
+        self.assertEqual(row["alex_disposition"], "pending")
+        self.assertEqual(row["label_adjudication"]
+                         ["ground_truth"], "clean")
+        self.assertEqual(row["label_adjudication"]
+                         ["adjudicated_by"], "operator")
 
 
 def _synth_transcript(path: Path, steps: list, finished: dict):

@@ -64,6 +64,19 @@
       "max_steps": 25,
       "tier": "cheap",
       "max_scope_files": 5
+    },
+    "jittest": {
+      "_about": "JiTTest catching-test spike (hypothesis-first, Phase 0b shape): at PR collection, a triggered PR gets a balanced-tier hypothesis run (evidence-verified, per-changed-function coverage), one test run for the top hypothesis, a mechanical three-state gate and Stage A assessment; a surviving catch flags the PR jittest:catch for the operator. Ships disabled; enabling is a separate operator decision. Tokens count inside the cycle budget. max_three_state_runs is the test step's verify-loop budget; launch enforces the tokens-out caps as a hard stop.",
+      "enabled": false,
+      "max_per_cycle": 2,
+      "hypothesis_tier": "balanced",
+      "test_tier": "cheap",
+      "max_tokens_out_hypothesis": 30000,
+      "max_tokens_out_test": 30000,
+      "max_steps": 25,
+      "max_files": 5,
+      "max_diff_lines": 300,
+      "max_three_state_runs": 3
     }
   },
   "providers": {
