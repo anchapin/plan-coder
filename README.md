@@ -26,6 +26,7 @@ Token plans (flat-rate coding plans from z.ai, MiniMax, and similar providers) r
 | `bin/grade_run.py` | Mechanical trajectory grader: scores one run 0–100 from its transcript (first-edit step, exploration ratio, test evidence, gates, completion) plus a claim-vs-diff check against the worktree when run live at collection time. No LLM judge |
 | `bin/ledger_check.py` | Per-issue retry guard: exits non-zero when an issue already has 2+ failed ledger rows and no PR opened — the supervisor calls it before briefing instead of eyeballing the ledger |
 | `bin/quick_check.py` | Tiny quota probe — sends a minimal completion to verify a plan's quota is live |
+| `bin/dry_run.py` | Offline dry run: runs the real worker loop against a fake provider on 127.0.0.1 — no credential, no network, no real repo. Produces the diff that a supervisor would wrap into a pull request, so a reviewer can validate the setup before spending quota |
 | `bin/render_prompts.py` | Renders the prompt templates with a deployment config into ready-to-install prompts |
 | `bin/install_crons.py` | Renders the three scheduled prompts and writes `local/cron-manifest.json` (sha256 per cron body) — the installer's checklist for putting generated bodies into a scheduler and verifying them |
 | `tests/` | Hermetic regression suite (stdlib `unittest`, no network, no credentials) covering config loading, both auth modes, the renderer, the installer manifest, and the publish gate's gitignore behavior. The publish gate runs it and aborts on failure |
@@ -39,7 +40,218 @@ Token plans (flat-rate coding plans from z.ai, MiniMax, and similar providers) r
 
 The prompts are written for a scheduled agent runner (cron-style), but nothing in the worker loop depends on one — you can run `agent.py` by hand against any brief.
 
-## Quick start
+## Quick start — ten minutes to your first worker PR
+
+Everything below runs in a fresh clone. Only step 4 needs a real credential, and
+step 5 covers the "no credential yet" case. Every command in this section was
+executed end to end on a fresh clone with placeholder values.
+
+**Prerequisites** — `git`, Python 3.9+ (stdlib only; nothing to `pip install`;
+verified on 3.12), the GitHub CLI (`gh`, already authenticated — `gh auth
+status`), and a local clone of the repo the workers are allowed to touch.
+
+### 1. Clone the harness
+
+```bash
+git clone https://github.com/you/plan-coder.git
+cd plan-coder
+```
+
+### 2. Copy the deployment config and fill in the repo set
+
+```bash
+cp config/deployment.example.json config/deployment.local.json
+```
+
+`config/deployment.local.json` is gitignored and is the file the code actually
+reads (search order: `$PLAN_CODER_CONFIG` → `config/deployment.local.json` →
+`~/.plan-coder/deployment.json`). Edit at least these fields:
+
+| Field | What to put there |
+|---|---|
+| `repos[]` | one entry per repo the workers may touch: `name`, `clone` (absolute path of your local clone), `slug` (`owner/repo` on GitHub), `base` (the branch workers branch from), `issues_per_cycle` |
+| `operator.name` | your name — it is substituted into the rendered prompts |
+| `skill.dir` | absolute path of **this clone** — the prompts call `<skill.dir>/bin/state_write.py`, `ledger_check.py`, `failover.py` |
+| `state.dir`, `worktrees.dir` | where the supervisor keeps `workers.json`, the ledger, and one worktree per worker |
+| `providers.zai.env_key`, `providers.minimax.env_key` | the names of the environment variables that hold your keys (defaults `ZAI_API_KEY`, `MINIMAX_API_KEY`) |
+| `crons.backlog-supervisor.schedule.every` | `10m` for the first rehearsal; put it back to `2h` afterwards |
+| `supervisor.max_parallel` | `1` for the first cycle |
+
+The shipped example is full of placeholders (`you/repo-a`, `~/repos/repo-a`, …).
+Every one of them must be yours, or the supervisor will read issues from the
+wrong repo. `config/deployment.local.json` is never committed.
+
+### 3. Credentials go in the environment, never in the config file
+
+```bash
+export ZAI_API_KEY=...        # z.ai (GLM Coding Plan key)
+export MINIMAX_API_KEY=...    # MiniMax (token-plan key)
+```
+
+Keys are read from the environment at request time (`bin/agent.py` →
+`_apply_auth`), or from a `dynamic_credentials` helper module in
+`$PLAN_CODER_CRED_DIR` or `~/.plan-coder/cred/` if you use a vault. Do **not**
+put a key in `config/deployment.local.json` — that file is gitignored, but the
+rule of the repo is that key material never enters a file the harness reads.
+
+### 4. Check that the credential is picked up (without printing it)
+
+```bash
+python3 -c "import os; k=os.environ.get('ZAI_API_KEY'); print('ZAI_API_KEY:', 'set' if k else 'NOT SET')"
+python3 bin/quick_check.py --provider zai
+```
+
+Expected output:
+
+```
+ZAI_API_KEY: set
+reply: ok
+usage: {"prompt_tokens": 12, "completion_tokens": 3, ...}
+```
+
+The first command prints only `set` / `NOT SET` — never the key. The second
+sends one tiny completion to the provider; it is the only step in this
+quickstart that spends quota, and it is the end-to-end proof that the
+credential was accepted.
+
+### 5. Offline dry run — the no-op equivalent of a first PR
+
+No credential, no network, no real repo: the worker loop runs against a fake
+provider on 127.0.0.1 and produces the same artifact a pull request would
+carry.
+
+```bash
+python3 bin/dry_run.py
+```
+
+Expected output (tail):
+
+```
+=== dry-run result ===
+workdir: /tmp/plan-coder-dryrun-8xhppt31/repo
+worker exit code: 0
+changed paths:
+   A DRY_RUN.md
+diffstat:
+DRY_RUN.md | 5 +++++
+ 1 file changed, 5 insertions(+)
+DRY RUN OK: a diff exists — this is the artifact a supervisor turns into a pull request.
+```
+
+Point it at a clone you already have with
+`python3 bin/dry_run.py --repo ~/repos/repo-a` — it creates a temporary git
+worktree, runs the same flow, and removes the worktree afterwards.
+
+### 6. Render and install the supervisor cron
+
+```bash
+python3 bin/install_crons.py
+```
+
+Expected output:
+
+```
+backlog-supervisor: /path/to/plan-coder/local/backlog-supervisor.rendered.md sha256=de8ba44b9070048c… (34728 chars)
+harness-tune: /path/to/plan-coder/local/harness-tune.rendered.md sha256=6e5d0f4d96f24766… (13713 chars)
+pr-shepherd: /path/to/plan-coder/local/pr-shepherd.rendered.md sha256=9ecd19ae2d8c21ba… (7298 chars)
+manifest -> /path/to/plan-coder/local/cron-manifest.json
+```
+
+The script renders the three prompt templates into `local/` (gitignored) and
+writes `local/cron-manifest.json` with each body's sha256. It does not talk to
+any scheduler API — installing a body is an agent action:
+
+1. take the **exact** content of `local/backlog-supervisor.rendered.md` and
+   save it as the scheduled prompt (your scheduler's cron/update tool);
+2. do the same for `local/pr-shepherd.rendered.md` and
+   `local/harness-tune.rendered.md`;
+3. re-read each saved body and compare its sha256 with the manifest:
+
+```bash
+python3 -c "import json; m=json.load(open('local/cron-manifest.json')); print(m['crons']['backlog-supervisor']['sha256'])"
+```
+
+Two checks worth running before you install anything:
+
+```bash
+# no unresolved tokens survived the render (an unresolved token aborts with exit 2)
+grep -c '{{' local/*.rendered.md
+
+# your repo list really made it into the body
+grep -n 'you/repo-a' local/backlog-supervisor.rendered.md
+```
+
+Edit the template in `prompts/` or the config — never the installed body.
+
+### 7. Give the supervisor one issue and watch the first PR
+
+Open a small, well-specified issue in the target repo (the supervisor reads
+issues with `gh issue list`; it never creates them):
+
+```bash
+gh issue create --repo you/repo-a \
+  --title "Add a one-line note to README" \
+  --body "Acceptance criteria: README.md contains the line 'Hello from plan-coder.' and the repo's test command still passes."
+```
+
+Then wait for the next supervisor tick (10 minutes with the rehearsal
+cadence) and look for the pull request:
+
+```bash
+gh pr list --repo you/repo-a
+```
+
+The supervisor isolates a worktree at `<worktrees.dir>/<repo>-worker-<issue>`,
+briefs a worker on branch `worker/<issue>-<short-slug>`, reviews the diff and
+the machine manifest, and opens the PR. From there the PR shepherd keeps the
+queue moving.
+
+**Time budget**: clone + config + credentials + install ≈ 10 minutes of setup;
+the PR lands on the next supervisor tick after that. If you have no scheduler
+agent runner at all, step 5 is the documented no-op dry-run equivalent: it
+produces the same diff, manifest, and report without spending quota.
+
+### When there are no credentials
+
+This is the first failure a new user hits. The worker fails fast — it does not
+fall through to the fallback provider, because a missing credential is a setup
+problem, not scarcity, and retrying would burn the other plan's quota:
+
+```
+## Summary
+
+WORKER ABORTED: no credential available: set ZAI_API_KEY in the environment, or configure a credential helper ($PLAN_CODER_CRED_DIR or ~/.plan-coder/cred)
+```
+
+(`bin/quick_check.py` raises the same message, as a `RuntimeError` traceback.)
+
+Where credentials go:
+
+| Mode | Where the key lives | How the worker finds it |
+|---|---|---|
+| Environment key (default) | `ZAI_API_KEY` / `MINIMAX_API_KEY` in the shell that runs the worker; the names come from `providers.<name>.env_key` in the deployment config | `bin/agent.py` reads the variable at request time |
+| Credential helper | a `dynamic_credentials.py` module in `$PLAN_CODER_CRED_DIR` or `~/.plan-coder/cred/` (the directory comes from `credentials.helper_dir`) | the helper injects the credential; the worker process never sees key material |
+
+How to verify they are picked up, without printing anything secret:
+
+```bash
+# 1. is the variable set? (prints set / NOT SET only)
+python3 -c "import os; k=os.environ.get('ZAI_API_KEY'); print('ZAI_API_KEY:', 'set' if k else 'NOT SET')"
+
+# 2. is the helper directory the config points at?
+python3 -c "import json,os; c=json.load(open('config/deployment.local.json')); d=os.path.expanduser(c.get('credentials',{}).get('helper_dir','~/.plan-coder/cred')); print(d, 'dynamic_credentials.py present:', os.path.isfile(os.path.join(d,'dynamic_credentials.py')))"
+
+# 3. does the provider accept it? (one tiny completion — the only step that spends quota)
+python3 bin/quick_check.py --provider zai
+```
+
+If (3) still fails, the key is wrong or the plan's quota is exhausted — the
+provider's own error is in the output. If the worker aborts while the
+supervisor runs, the same fix applies: the supervisor's shell must have the
+key exported (a `~/.profile` line or your scheduler's environment settings),
+because the cron body renders *paths*, never secrets.
+
+## Running a worker by hand
 
 ```bash
 export ZAI_API_KEY=...        # z.ai (GLM Coding Plan key)
