@@ -309,7 +309,7 @@ class FakeGhCli:
         return subprocess.run([sys.executable, str(BIN /
                                                   "factory_failure_tickets.py")]
                               + list(args), input=stdin, env=self.env,
-                              capture_output=True, text=True)
+                              capture_output=True, text=True, check=False)
 
     def calls(self):
         if not self.log.exists():

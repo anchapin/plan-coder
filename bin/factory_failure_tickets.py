@@ -250,7 +250,7 @@ def run_gh(args: list[str]) -> str:
     """The one place this script touches GitHub. Tests mock this."""
     try:
         proc = subprocess.run(["gh"] + list(args), capture_output=True,
-                              text=True)
+                              text=True, check=False)
     except OSError as exc:
         raise GhError(f"gh could not be run: {exc}") from exc
     if proc.returncode != 0:
