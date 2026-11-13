@@ -12,6 +12,14 @@
 - Worktree: this directory, branch `worker/123-retry-backoff`, based on `origin/main`.
 - Rules: no commits, pushes, or merges — leave changes uncommitted. Stay inside this workdir. Never touch `.git`. Never delete, move, or rename this worktree. If the issue and the code contradict each other, report the contradiction in your summary instead of guessing.
 
+## PROOF — what evidence to leave behind
+
+`PROOF: type=numeric; items=retry delay table for the 429 case (before 1.00s fixed, after max backoff seconds), the cap case (after <= 30.0s); worker quotes the measured numbers and the command that produced them, and commits the output under artefacts/retry-backoff/ if the repo keeps artefacts.`
+
+- Type: `numeric` — the PR body needs before/after headline numbers with the case they come from.
+- The worker leaves the material (numbers, output paths); the supervisor assembles the PR's `## Proof` section from it at PR-creation time.
+- If an item above cannot be produced, say so in the report — the supervisor records it as an explicit `proof gap:` line, it is never silently dropped.
+
 ## Acceptance criteria
 
 1. Retry delays follow `min(30, 2^n) * jitter(0.5–1.0)` seconds for attempt `n`.

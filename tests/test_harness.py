@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -1650,6 +1651,180 @@ class TestShepherdLedger(unittest.TestCase):
     def test_summary_missing_ledger_exits_2(self):
         r = self.run_sl("summary")
         self.assertEqual(r.returncode, 2)
+
+
+class TestProofReceipt(unittest.TestCase):
+    """The proof-packet receipt: presence/gaps per PR + coverage."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="pc-receipt-"))
+        self.ledger = self.tmp / "receipts.jsonl"
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def run_rc(self, *argv):
+        return subprocess.run(
+            [sys.executable, str(REPO / "bin" / "receipt.py"), *argv],
+            capture_output=True, text=True, timeout=60)
+
+    def test_check_reports_present_gaps_and_absent(self):
+        r = self.run_rc("check", "--required", "a,b", "--present", "a,b",
+                        "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout)["proof"], "present")
+
+        r = self.run_rc("check", "--required", "a,b", "--present", "a",
+                        "--json")
+        data = json.loads(r.stdout)
+        self.assertEqual(data["proof"], "gaps")
+        self.assertEqual(data["gap_lines"], ["proof gap: b"])
+
+        r = self.run_rc("check", "--required", "a", "--present", "",
+                        "--json")
+        data = json.loads(r.stdout)
+        self.assertEqual(data["proof"], "absent")
+        self.assertEqual(data["gap_lines"], ["proof gap: a"])
+
+    def test_check_marks_not_available_with_reason(self):
+        r = self.run_rc("check", "--required", "before screenshot",
+                        "--present", "",
+                        "--not-available", "before screenshot (no display)",
+                        "--json")
+        data = json.loads(r.stdout)
+        # an explicitly recorded unavailable item is a known gap, not a
+        # silent absence — the receipt names it and the reason
+        self.assertEqual(data["proof"], "gaps")
+        self.assertEqual(
+            data["gap_lines"],
+            ["proof gap: before screenshot (not available: no display)"])
+
+    def test_record_and_summary_report_coverage_over_window(self):
+        r = self.run_rc("record", "--repo", "you/alpha", "--pr", "1",
+                        "--url", "https://example/pr/1", "--type", "visual",
+                        "--required", "before screenshot,after screenshot",
+                        "--present", "before screenshot,after screenshot",
+                        "--ledger", str(self.ledger))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = self.run_rc("record", "--repo", "you/beta", "--pr", "2",
+                        "--type", "numeric", "--required", "before numbers",
+                        "--present", "", "--not-available",
+                        "before numbers (no baseline run)",
+                        "--ledger", str(self.ledger))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        rows = [json.loads(x) for x in self.ledger.read_text().splitlines()]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual([r["proof"] for r in rows], ["present", "gaps"])
+        self.assertTrue(all("ts" in r for r in rows))
+
+        r = self.run_rc("summary", "--ledger", str(self.ledger), "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        data = json.loads(r.stdout)
+        self.assertEqual(data["prs"], 2)
+        self.assertEqual(data["by_proof"]["present"], 1)
+        self.assertEqual(data["by_proof"]["gaps"], 1)
+        self.assertEqual(data["required_prs"], 2)
+        self.assertEqual(data["coverage_pct"], 50.0)
+        self.assertEqual(data["gap_prs"][0]["gaps"], ["before numbers"])
+
+        # window: a --since far in the future empties the window
+        r = self.run_rc("summary", "--ledger", str(self.ledger),
+                        "--since", "2999-01-01", "--json")
+        data = json.loads(r.stdout)
+        self.assertEqual(data["prs"], 0)
+        self.assertIsNone(data["coverage_pct"])
+
+    def test_summary_missing_ledger_exits_2(self):
+        r = self.run_rc("summary", "--ledger", str(self.ledger))
+        self.assertEqual(r.returncode, 2)
+
+
+class TestProofPromptAndExamples(unittest.TestCase):
+    """The supervisor prompt assembles the Proof section; examples show it."""
+
+    def prompt(self):
+        return (REPO / "prompts" / "backlog-supervisor.md").read_text()
+
+    def test_prompt_has_step7_proof_assembly(self):
+        text = self.prompt()
+        self.assertIn("7-proof.", text)
+        self.assertIn("## Proof", text)
+        self.assertIn("proof gap:", text)
+        self.assertIn("bin/receipt.py record", text)
+        self.assertIn("bin/receipt.py check", text)
+        # the brief must carry a PROOF: expectation
+        self.assertIn("PROOF:", text)
+
+    def test_rendered_prompt_keeps_proof_instructions(self):
+        tmp = Path(tempfile.mkdtemp(prefix="pc-proof-render-"))
+        try:
+            config = tmp / "deployment.json"
+            config.write_text(json.dumps(FULL_CONFIG))
+            out = tmp / "out"
+            r = subprocess.run(
+                [sys.executable, str(REPO / "bin" / "render_prompts.py"),
+                 "--config", str(config), "--out", str(out)],
+                capture_output=True, text=True, timeout=120)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            sup = (out / "backlog-supervisor.rendered.md").read_text()
+            self.assertNotIn("{{", sup)
+            self.assertIn("7-proof.", sup)
+            self.assertIn("proof gap:", sup)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_examples_show_proof_for_visual_and_numeric_repos(self):
+        brief = (REPO / "examples" / "BRIEF.example.md").read_text()
+        self.assertIn("PROOF:", brief)
+        self.assertIn("type=numeric", brief)
+        brief_visual = (REPO / "examples" / "BRIEF.visual.example.md").read_text()
+        self.assertIn("PROOF:", brief_visual)
+        self.assertIn("type=visual", brief_visual)
+        visual = (REPO / "examples" / "PR_BODY.visual.example.md").read_text()
+        numeric = (REPO / "examples" / "PR_BODY.numeric.example.md").read_text()
+        for body in (visual, numeric):
+            self.assertIn("## Proof", body)
+            self.assertIn("Provider/tier:", body)
+            self.assertIn("diffstat", body)
+        self.assertIn("before", visual)
+        self.assertIn("after", visual)
+        self.assertIn("| case | before | after |", numeric)
+
+    def test_example_briefs_declare_the_type_the_pr_body_shows(self):
+        pairs = (("BRIEF.visual.example.md", "PR_BODY.visual.example.md"),
+                 ("BRIEF.example.md", "PR_BODY.numeric.example.md"))
+        for brief_name, body_name in pairs:
+            brief = (REPO / "examples" / brief_name).read_text()
+            body = (REPO / "examples" / body_name).read_text()
+            kind = re.search(r"PROOF: type=(\w+)", brief).group(1)
+            self.assertIn(kind, brief)
+            # the PR body's proof material matches the declared type
+            if kind == "visual":
+                self.assertIn("Before/after", body)
+            elif kind == "numeric":
+                self.assertIn("Headline numbers", body)
+
+    def test_example_with_missing_proof_states_the_gap(self):
+        gap = (REPO / "examples" / "PR_BODY.gap.example.md").read_text()
+        self.assertIn("## Proof", gap)
+        self.assertIn("proof gap:", gap)
+        # the gap brief requires the numbers the gap example could not produce
+        brief = (REPO / "examples" / "BRIEF.gap.example.md").read_text()
+        self.assertIn("PROOF:", brief)
+        self.assertIn("drop_5m", brief)
+        # the gap example's line is the one receipt.py itself produces
+        r = subprocess.run(
+            [sys.executable, str(REPO / "bin" / "receipt.py"), "check",
+             "--required", "before numbers for the case `drop_5m`",
+             "--present", "",
+             "--not-available",
+             "before numbers for the case `drop_5m` (no baseline run was "
+             "captured in the worktree)",
+             "--json"],
+            capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        gap_line = json.loads(r.stdout)["gap_lines"][0]
+        self.assertIn(gap_line, gap)
 
 
 if __name__ == "__main__":
