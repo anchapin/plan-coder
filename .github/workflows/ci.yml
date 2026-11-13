@@ -1,0 +1,56 @@
+name: CI
+
+# Continuous integration for plan-coder: the harness regression suite
+# (pytest) plus ruff lint / format checks, run on every push and on every
+# pull request so PRs get a check signal.
+#
+# Least privilege: read-only access to the repository contents, no secrets
+# context is referenced anywhere in this workflow, and no operator-private
+# configuration is used (the repo's committed config/deployment.example.json
+# is the only config that exists in a fresh clone).
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: pytest + ruff
+    runs-on: ubuntu-latest
+    env:
+      # Non-operator-specific, interpreter-level settings only.
+      PYTHONIOENCODING: utf-8
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned test and lint tools
+        # The repo has no dependency manifest and GitHub runners ship
+        # neither pytest nor ruff, so install both here at pinned versions.
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install "pytest==9.1.1" "ruff==0.17.5"
+
+      - name: Run the test suite
+        run: python3 -m pytest tests/ -q
+
+      - name: Ruff lint
+        # ruff.toml pins an explicit rule selection and enumerates the
+        # pre-existing violations of this base as per-file ignores.
+        run: ruff check .
+
+      - name: Ruff format check
+        # Known pre-existing failure on this base: 18 files are not
+        # ruff-formatted.  Reformatting the codebase is out of scope for
+        # this change (issue #4), and the files are deliberately not
+        # excluded, so this step reports them but does not block the run.
+        continue-on-error: true
+        run: ruff format --check .
