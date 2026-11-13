@@ -60,9 +60,15 @@ Two rules keep the state honest:
 - Parallel workers in the same repo take issues in different areas of the codebase so their PRs don't conflict; foundations merge before dependents.
 - The shepherd only ever touches `worker/*` branches, never rebases, and caps its own fix attempts. The supervisor never merges at PR-open time (CI hasn't run); merging belongs to the shepherd under policy, or to the human.
 
-## Providers
+## Plans, routes, and harnesses
 
-`agent.py` speaks the OpenAI chat-completions shape to two plan providers:
+A subscription plan is the unit of capacity. Each plan names a vendor, its allowed API/CLI routes, and the models it can serve by tier. A CLI route identifies a harness; this slice defines the route interface and one recording stub, not vendor-specific production runners.
+
+A plan's `locked_to` list is an allow-list (empty means unrestricted). Dispatch resolution fails closed when the requested route is outside that list, with an error that names the plan and allowed routes; it never falls back silently. For example, a Claude Pro/Max plan can be locked to Anthropic's Claude CLI harness and cannot be dispatched through a generic API or another vendor's CLI.
+
+Legacy `providers` records remain supported as API-only plans with one route each, so the existing provider order, model tiers, authentication, and quota failover behavior are unchanged.
+
+`agent.py` speaks the OpenAI chat-completions shape to two API plan providers:
 
 - **z.ai GLM Coding Plan** — the coding-plan endpoint only; plan keys and pay-as-you-go keys are different products, and only plan quota should ever be spent here.
 - **MiniMax token plan** — default priority; fails over to z.ai when quota-limited through polite retries (honoring `Retry-After`). A 401/403 fails fast: it signals a configuration problem, not scarcity, and must not burn the fallback's quota.

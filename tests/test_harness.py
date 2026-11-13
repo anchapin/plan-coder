@@ -167,6 +167,112 @@ class TestConfig(TreeCase):
         self.assertEqual(r.stdout.strip(), "{}")
 
 
+class TestPlans(TreeCase):
+    def test_legacy_provider_is_an_api_plan_and_keeps_resolution(self):
+        """A providers-only config is one API plan per old provider."""
+        r = self.agent_eval(
+            "import agent, json; "
+            "plan = agent.PLAN_BY_ID['minimax']; "
+            "dispatch = agent.resolve_plan_dispatch('minimax', 'api', "
+            "tier='cheap'); "
+            "print(json.dumps({"
+            "'ids': [p.id for p in agent.PLANS], "
+            "'route': plan.routes[0].key, "
+            "'models': plan.models, "
+            "'resolved_model': dispatch.model, "
+            "'locked_to': [r.key for r in plan.locked_to]}))")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        data = json.loads(r.stdout)
+        self.assertEqual(data["ids"], ["minimax", "zai"])
+        self.assertEqual(
+            data["route"],
+            "api:https://api.minimax.io/v1/chat/completions")
+        self.assertEqual(data["models"], {
+            "cheap": "MiniMax-M2.5-highspeed",
+            "balanced": "MiniMax-M2.7",
+            "flagship": "MiniMax-M3",
+        })
+        self.assertEqual(data["resolved_model"], "MiniMax-M2.5-highspeed")
+        self.assertEqual(data["locked_to"], [])
+
+    def test_malformed_plans_are_rejected_with_named_error(self):
+        bad = self.tmp / "bad-plans.json"
+        bad.write_text(json.dumps({"plans": [{
+            "id": "broken",
+            "vendor": "example",
+            "routes": [],
+            "models": {"balanced": "example-model"},
+            "locked_to": [],
+        }]}))
+        r = self.agent_eval(
+            "import agent", env=self.env(PLAN_CODER_CONFIG=str(bad)))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("DeploymentConfigError", r.stderr)
+        self.assertIn("invalid plan 'broken'", r.stderr)
+        self.assertIn("routes must be a non-empty list", r.stderr)
+
+    def test_locked_cli_plan_fails_closed_and_stub_records_invocation(self):
+        r = self.agent_eval(
+            "import agent, plans\n"
+            "try:\n"
+            "    agent.resolve_plan_dispatch('anthropic-max', "
+            "{'kind': 'api', 'endpoint': 'https://api.anthropic.com/v1/messages'})\n"
+            "except agent.PlanLockError as exc:\n"
+            "    print(type(exc).__name__)\n"
+            "    print(exc)\n"
+            "d = agent.resolve_plan_dispatch('anthropic-max', "
+            "{'kind': 'cli', 'harness': 'claude'})\n"
+            "print(d.plan_id, d.route.key, d.model)\n"
+            "print(' '.join(plans.cli_invocation(d.route, d.model)))",
+            env=self.env(PLAN_CODER_CONFIG=str(
+                REPO / "config" / "deployment.example.json")))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        lines = r.stdout.splitlines()
+        self.assertEqual(lines[0], "PlanLockError")
+        self.assertIn("anthropic-max", lines[1])
+        self.assertIn("allowed routes: cli:claude", lines[1])
+        self.assertEqual(lines[2],
+                         "anthropic-max cli:claude claude-sonnet-4-5")
+        self.assertEqual(lines[3], "claude --model claude-sonnet-4-5")
+
+        # The only CLI implementation in this slice is a credential-free
+        # stub.  It records what a runner would invoke; it never runs it.
+        record = self.tmp / "cli-invocation.json"
+        stub = self.run_bin(
+            "plan_cli_stub.py", "--harness", "claude",
+            "--model", "claude-sonnet-4-5", "--record", str(record))
+        self.assertEqual(stub.returncode, 0, stub.stdout + stub.stderr)
+        recorded = json.loads(record.read_text())
+        self.assertTrue(recorded["stub"])
+        self.assertEqual(recorded["argv"],
+                         ["claude", "--model", "claude-sonnet-4-5"])
+
+    def test_example_config_expresses_api_and_locked_cli_plans(self):
+        r = self.agent_eval(
+            "import agent, json; print(json.dumps([{"
+            "'id': p.id, 'vendor': p.vendor, "
+            "'routes': [x.key for x in p.routes], "
+            "'locked_to': [x.key for x in p.locked_to]} "
+            "for p in agent.PLANS])); "
+            "print(agent.resolve_dispatch('minimax', 'api', tier='cheap').model); "
+            "print(agent.resolve_dispatch('zai', 'api', tier='flagship').model)",
+            env=self.env(PLAN_CODER_CONFIG=str(
+                REPO / "config" / "deployment.example.json")))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        lines = r.stdout.splitlines()
+        data = json.loads(lines[0])
+        self.assertEqual(lines[1:], ["MiniMax-M2.5-highspeed", "glm-5.3"])
+        self.assertEqual([plan["id"] for plan in data],
+                         ["minimax", "zai", "anthropic-max"])
+        self.assertEqual(data[0]["routes"], [
+            "api:https://api.minimax.io/v1/chat/completions"])
+        self.assertEqual(data[1]["routes"], [
+            "api:https://api.z.ai/api/coding/paas/v4/chat/completions"])
+        self.assertEqual(data[2]["routes"], [
+            "cli:claude", "api:https://api.anthropic.com/v1/messages"])
+        self.assertEqual(data[2]["locked_to"], ["cli:claude"])
+
+
 class TestAuth(TreeCase):
     def test_fail_fast_without_any_credential(self):
         r = self.run_bin("quick_check.py", "--provider", "minimax",

@@ -66,6 +66,33 @@ Provider notes:
 - MiniMax is the default priority provider; the chain fails over automatically when a provider stays rate/quota-limited through polite retries. Auth failures (401/403) fail fast instead of burning the fallback provider's quota.
 - Tiers: z.ai cheap `glm-5.3-flashx`, balanced `glm-5.3-flash`, flagship `glm-5.3`; MiniMax cheap `MiniMax-M2.5-highspeed`, balanced `MiniMax-M2.7`, flagship `MiniMax-M3`.
 
+## Plans, routes, and harnesses
+
+A **plan** is the unit of subscription capacity. A plan belongs to a vendor, exposes one or more **routes**, and declares the **models** it can serve by tier. A route is either an API endpoint (`kind: "api"`) or a CLI harness (`kind: "cli"`). The harness name is an interface boundary, not a vendor runner built into this repository.
+
+```json
+{
+  "plans": [
+    {
+      "id": "anthropic-max",
+      "vendor": "anthropic",
+      "routes": [
+        {"kind": "cli", "harness": "claude"},
+        {"kind": "api", "endpoint": "https://api.anthropic.com/v1/messages"}
+      ],
+      "models": {"balanced": "claude-sonnet-4-5"},
+      "locked_to": [{"kind": "cli", "harness": "claude"}]
+    }
+  ]
+}
+```
+
+`models` is a tier-to-model map, so the existing cheap/balanced/flagship ladder remains policy data rather than vendor-specific code. `locked_to` is an allow-list of routes; an empty list means unrestricted. If a dispatch asks a locked plan for any other route, resolution fails closed with `PlanLockError`, naming the plan and its allowed routes. It never silently falls back to another harness, API, vendor, or plan. The lock is configuration data: the resolver has no per-vendor exceptions.
+
+For example, a Claude Pro/Max plan is limited to Anthropic's own tooling: only its Claude CLI harness is allowed by `locked_to`, even if another route is declared, and no generic API endpoint or another coding CLI may be substituted. The reference slice includes one generic CLI stub (`bin/plan_cli_stub.py`) that records the invocation a runner would receive without contacting a vendor or reading credentials; it is not a production Codex, Cursor, Grok, OpenCode, or Anthropic runner.
+
+The optional `plans` section is validated when the deployment config is loaded. Invalid plan data raises `DeploymentConfigError`. Plans keep their declaration order unless `workers.plan_order` overrides it. For back-compat, a config containing only the existing `providers` records is represented as one API-only plan per provider (a single API route), with the same provider order, model tiers, auth behavior, and failover semantics as before.
+
 ## Deployment configuration
 
 Everything specific to one installation lives in a single config file, not in the code or the prompts:
