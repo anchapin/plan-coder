@@ -1653,6 +1653,25 @@ class TestShepherdLedger(unittest.TestCase):
         self.assertEqual(r.returncode, 2)
 
 
+class TestDryRun(unittest.TestCase):
+    """bin/dry_run.py: the offline no-op equivalent of a first worker PR.
+
+    No network, no credentials: the worker loop runs against a fake
+    provider on 127.0.0.1 and must leave a real diff behind.
+    """
+
+    def test_dry_run_produces_a_diff(self):
+        home = tempfile.mkdtemp(prefix="pc-dryrun-home-")
+        env = {"PATH": os.environ["PATH"], "HOME": home}
+        for var in ("ZAI_API_KEY", "MINIMAX_API_KEY"):
+            env.pop(var, None)
+        r = subprocess.run(
+            [sys.executable, str(REPO / "bin" / "dry_run.py")],
+            capture_output=True, text=True, env=env, cwd=home, timeout=300)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("DRY RUN OK", r.stdout)
+        self.assertIn("DRY_RUN.md", r.stdout)
+        shutil.rmtree(home, ignore_errors=True)
 class TestProofReceipt(unittest.TestCase):
     """The proof-packet receipt: presence/gaps per PR + coverage."""
 
