@@ -1,5 +1,5 @@
 {
-  "_about": "Deployment configuration for plan-coder. Copy this file to deployment.local.json in the same directory and fill in your real values. deployment.local.json is gitignored and is the version actually used: bin/agent.py reads it at startup (credential-helper labels, transcript directory) and bin/render_prompts.py renders the prompt templates in prompts/ with it into local/ (also gitignored). Search order for the config: $PLAN_CODER_CONFIG, then config/deployment.local.json relative to the repo root, then ~/.plan-coder/deployment.json. Every field is optional; built-in defaults cover a standalone env-key setup. workers.max_tokens_out (0 = off) caps completion tokens per worker run and workers.cycle_tokens_out_budget (0 = off) caps completion tokens collected per supervisor cycle; both are pathological-burn guards, not quota limits \u2014 set them above the p99 of measured runs (see bin/trace_summary.py).",
+  "_about": "Deployment configuration for plan-coder. Copy this file to deployment.local.json in the same directory and fill in your real values. deployment.local.json is gitignored and is the version actually used: bin/agent.py reads it at startup (credential-helper labels, transcript directory) and bin/render_prompts.py renders the prompt templates in prompts/ with it into local/ (also gitignored). Search order for the config: $PLAN_CODER_CONFIG, then config/deployment.local.json relative to the repo root, then ~/.plan-coder/deployment.json. Every field is optional; built-in defaults cover a standalone env-key setup. The optional plans section is the subscription-capacity model: each plan declares its id, vendor, API/CLI routes, tier-to-model map, and locked_to route allow-list (empty means unrestricted). Malformed plans are rejected on load; a providers-only config remains back-compatible as one API-only plan per provider. workers.max_tokens_out (0 = off) caps completion tokens per worker run and workers.cycle_tokens_out_budget (0 = off) caps completion tokens collected per supervisor cycle; both are pathological-burn guards, not quota limits \u2014 set them above the p99 of measured runs (see bin/trace_summary.py).",
   "operator": {
     "name": "Your Name",
     "flag_label": "NEEDS HUMAN"
@@ -89,6 +89,63 @@
       "credential": "custom.minimax"
     }
   },
+  "plans": [
+    {
+      "id": "minimax",
+      "vendor": "minimax",
+      "routes": [
+        {
+          "kind": "api",
+          "endpoint": "https://api.minimax.io/v1/chat/completions"
+        }
+      ],
+      "models": {
+        "cheap": "MiniMax-M2.5-highspeed",
+        "balanced": "MiniMax-M2.7",
+        "flagship": "MiniMax-M3"
+      },
+      "locked_to": []
+    },
+    {
+      "id": "zai",
+      "vendor": "zai",
+      "routes": [
+        {
+          "kind": "api",
+          "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
+        }
+      ],
+      "models": {
+        "cheap": "glm-5.3-flashx",
+        "balanced": "glm-5.3-flash",
+        "flagship": "glm-5.3"
+      },
+      "locked_to": []
+    },
+    {
+      "id": "anthropic-max",
+      "vendor": "anthropic",
+      "routes": [
+        {
+          "kind": "cli",
+          "harness": "claude"
+        },
+        {
+          "kind": "api",
+          "endpoint": "https://api.anthropic.com/v1/messages"
+        }
+      ],
+      "models": {
+        "balanced": "claude-sonnet-4-5"
+      },
+      "locked_to": [
+        {
+          "kind": "cli",
+          "harness": "claude"
+        }
+      ]
+    }
+  ],
   "credentials": {
     "helper_dir": "~/.plan-coder/cred"
   },
@@ -101,7 +158,7 @@
   },
   "merge_policy": {
     "known_failures": "<required-checks drift>, <regression tracked in #NNNN>",
-    "hard_stop_domain": "simulation/physics outputs",
+    "hard_stop_domain": "<your domain-judgment area, e.g. numeric outputs>",
     "directive_quote": "<your aggressive-merge directive, quoted>",
     "directive_date": "<YYYY-MM-DD>"
   },
@@ -129,7 +186,7 @@
       "schedule": {
         "kind": "interval",
         "every": "2h",
-        "timezone": "America/New_York"
+        "timezone": "UTC"
       },
       "owner": "goal:<your-goal-slug>",
       "timeout_secs": 10800
@@ -139,7 +196,7 @@
       "schedule": {
         "kind": "interval",
         "every": "30m",
-        "timezone": "America/New_York"
+        "timezone": "UTC"
       },
       "owner": "goal:<your-goal-slug>",
       "timeout_secs": 3600
@@ -151,7 +208,7 @@
         "dow": [
           "Sun"
         ],
-        "time": "13:06:00",
+        "time": "03:00:00",
         "timezone": "@user.current"
       },
       "owner": "goal:<your-goal-slug>",

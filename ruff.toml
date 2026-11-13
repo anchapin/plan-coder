@@ -1,0 +1,152 @@
+# Ruff configuration for the plan-coder harness.
+#
+# The repository has no dependency manifest and no pyproject.toml, so this
+# file provides the lint configuration that CI uses.
+#
+# Two rules govern this file:
+#   * No blanket suppression.  There is no `ignore = ["ALL"]`, no global
+#     per-rule `ignore`, and no directory-wide `exclude`.  The rule
+#     selection below is explicit, and the per-file ignores enumerate only
+#     the violations that already exist on the base commit
+#     (23c1ac3) -- each one is annotated as pre-existing.
+#   * No harness source is modified to satisfy the linter.  Every
+#     pre-existing violation is listed here instead.
+#
+# `ruff check .` is green with this configuration; `ruff format --check .`
+# still reports 18 pre-existing unformatted files, which are listed in the
+# issue #4 report (reformatting the codebase is out of scope there).
+
+[lint]
+# Explicit rule selection: pyflakes + the pycodestyle subsets ruff enables
+# by default, plus the handful of additional rules whose violations are
+# enumerated per file below.
+select = [
+    "E4",      # pycodestyle: import, whitespace and indentation
+    "E7",      # pycodestyle: statement-level rules (e.g. E741)
+    "E9",      # pycodestyle: syntax/IO errors
+    "F",       # pyflakes (F401 unused imports)
+    "I001",    # isort: unsorted imports
+    "B023",    # flake8-bugbear: function uses loop variable
+    "UP017",   # pyupgrade: datetime.timezone.utc -> datetime.UTC
+    "UP035",   # pyupgrade: deprecated import
+    "SIM115",  # flake8-simplify: open() without a context manager
+    "ISC004",  # flake8-implicit-str-concat: implicit concat in a literal
+    "PLW1510", # pylint: subprocess.run without an explicit check
+    "EXE001",  # flake8-executable: shebang without the executable bit
+    "RUF100",  # ruff: unused noqa directive
+    "RUF012",  # ruff: mutable class default
+    "S112",    # flake8-bandit: try/except/continue
+    "PIE810",  # flake8-pie: multiple starts/ends with a call
+    "BLE001",  # flake8-blind-except: blind except
+    "FURB122", # refurb: write to a loop variable instead of a slice
+    "FURB188", # refurb: slice to remove a prefix/suffix
+]
+
+[lint.per-file-ignores]
+# Every entry below is a violation that is already present on the base
+# commit 23c1ac3.  They are enumerated per file so that no rule is
+# suppressed repo-wide and no source file has to be edited.
+"bin/agent.py" = [
+    "BLE001",  # pre-existing on base: blind except
+    "EXE001",  # pre-existing on base: shebang without the executable bit
+    "F401",    # pre-existing on base: unused import
+    "I001",    # pre-existing on base: unsorted imports
+    "PLW1510", # pre-existing on base: subprocess.run without check=
+    "RUF100",  # pre-existing on base: noqa: BLE001 directives, unused because
+               # BLE001 is disabled for this file above
+    "S112",    # pre-existing on base: try/except/continue
+    "SIM115",  # pre-existing on base: open() without a context manager
+    "UP017",   # pre-existing on base: datetime.timezone.utc
+]
+"bin/contract_check.py" = [
+    "EXE001",  # pre-existing on base: shebang without the executable bit
+    "SIM115",  # pre-existing on base: open() without a context manager
+]
+"bin/failover.py" = [
+    "EXE001",  # pre-existing on base: shebang without the executable bit
+    "I001",    # pre-existing on base: unsorted imports
+    "ISC004",  # pre-existing on base: implicit string concatenation
+    "RUF100",  # pre-existing on base: unused noqa directive
+]
+"bin/goldfish.py" = [
+    "EXE001",  # pre-existing on base: shebang without the executable bit
+    "RUF100",  # pre-existing on base: unused noqa directive
+    "SIM115",  # pre-existing on base: open() without a context manager
+    "UP017",   # pre-existing on base: datetime.timezone.utc
+]
+"bin/grade_run.py" = [
+    "EXE001",  # pre-existing on base: shebang without the executable bit
+    "PLW1510", # pre-existing on base: subprocess.run without check=
+]
+"bin/install_crons.py" = [
+    "B023",    # pre-existing on base: function uses loop variable
+    "EXE001",  # pre-existing on base: shebang without the executable bit
+    "RUF100",  # pre-existing on base: unused noqa directive
+    "SIM115",  # pre-existing on base: open() without a context manager
+    "UP017",   # pre-existing on base: datetime.timezone.utc
+]
+"bin/jittest.py" = [
+    "EXE001",  # pre-existing on base: shebang without the executable bit
+    "F401",    # pre-existing on base: unused import
+    "FURB188", # pre-existing on base: slice to remove a prefix/suffix
+    "ISC004",  # pre-existing on base: implicit string concatenation
+    "PIE810",  # pre-existing on base: multiple startswith calls
+    "PLW1510", # pre-existing on base: subprocess.run without check=
+    "RUF100",  # pre-existing on base: unused noqa directive
+    "SIM115",  # pre-existing on base: open() without a context manager
+    "UP017",   # pre-existing on base: datetime.timezone.utc
+]
+"bin/ledger_check.py" = [
+    "EXE001",  # pre-existing on base: shebang without the executable bit
+    "RUF100",  # pre-existing on base: unused noqa directive
+]
+"bin/plan_cli_stub.py" = [
+    "EXE001",  # pre-existing on base: shebang without the executable bit
+]
+"bin/plans.py" = [
+    "EXE001",  # pre-existing on base: shebang without the executable bit
+    "UP035",   # pre-existing on base: deprecated import
+]
+"bin/quick_check.py" = [
+    "EXE001",  # pre-existing on base: shebang without the executable bit
+    "F401",    # pre-existing on base: unused import
+    "I001",    # pre-existing on base: unsorted imports
+]
+"bin/receipt.py" = [
+    "EXE001",  # pre-existing on base: shebang without the executable bit
+    "RUF100",  # pre-existing on base: unused noqa directive
+    "UP017",   # pre-existing on base: datetime.timezone.utc
+]
+"bin/render_prompts.py" = [
+    "B023",    # pre-existing on base: function uses loop variable
+    "EXE001",  # pre-existing on base: shebang without the executable bit
+    "F401",    # pre-existing on base: unused import
+    "S112",    # pre-existing on base: try/except/continue
+    "SIM115",  # pre-existing on base: open() without a context manager
+]
+"bin/shepherd_ledger.py" = [
+    "EXE001",  # pre-existing on base: shebang without the executable bit
+    "RUF100",  # pre-existing on base: unused noqa directive
+    "UP017",   # pre-existing on base: datetime.timezone.utc
+]
+"bin/state_write.py" = [
+    "EXE001",  # pre-existing on base: shebang without the executable bit
+    "UP017",   # pre-existing on base: datetime.timezone.utc
+]
+"bin/sync_public.py" = [
+    "E741",    # pre-existing on base: ambiguous variable name
+    "EXE001",  # pre-existing on base: shebang without the executable bit
+    "PLW1510", # pre-existing on base: subprocess.run without check=
+    "S112",    # pre-existing on base: try/except/continue
+    "SIM115",  # pre-existing on base: open() without a context manager
+]
+"bin/trace_summary.py" = [
+    "EXE001",  # pre-existing on base: shebang without the executable bit
+    "S112",    # pre-existing on base: try/except/continue
+]
+"tests/test_harness.py" = [
+    "FURB122", # pre-existing on base: write to a loop variable
+    "ISC004",  # pre-existing on base: implicit string concatenation
+    "PLW1510", # pre-existing on base: subprocess.run without check=
+    "RUF012",  # pre-existing on base: mutable class default
+]

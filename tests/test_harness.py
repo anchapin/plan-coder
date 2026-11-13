@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -165,6 +166,112 @@ class TestConfig(TreeCase):
                  "PLAN_CODER_CONFIG": str(bad)})
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout.strip(), "{}")
+
+
+class TestPlans(TreeCase):
+    def test_legacy_provider_is_an_api_plan_and_keeps_resolution(self):
+        """A providers-only config is one API plan per old provider."""
+        r = self.agent_eval(
+            "import agent, json; "
+            "plan = agent.PLAN_BY_ID['minimax']; "
+            "dispatch = agent.resolve_plan_dispatch('minimax', 'api', "
+            "tier='cheap'); "
+            "print(json.dumps({"
+            "'ids': [p.id for p in agent.PLANS], "
+            "'route': plan.routes[0].key, "
+            "'models': plan.models, "
+            "'resolved_model': dispatch.model, "
+            "'locked_to': [r.key for r in plan.locked_to]}))")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        data = json.loads(r.stdout)
+        self.assertEqual(data["ids"], ["minimax", "zai"])
+        self.assertEqual(
+            data["route"],
+            "api:https://api.minimax.io/v1/chat/completions")
+        self.assertEqual(data["models"], {
+            "cheap": "MiniMax-M2.5-highspeed",
+            "balanced": "MiniMax-M2.7",
+            "flagship": "MiniMax-M3",
+        })
+        self.assertEqual(data["resolved_model"], "MiniMax-M2.5-highspeed")
+        self.assertEqual(data["locked_to"], [])
+
+    def test_malformed_plans_are_rejected_with_named_error(self):
+        bad = self.tmp / "bad-plans.json"
+        bad.write_text(json.dumps({"plans": [{
+            "id": "broken",
+            "vendor": "example",
+            "routes": [],
+            "models": {"balanced": "example-model"},
+            "locked_to": [],
+        }]}))
+        r = self.agent_eval(
+            "import agent", env=self.env(PLAN_CODER_CONFIG=str(bad)))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("DeploymentConfigError", r.stderr)
+        self.assertIn("invalid plan 'broken'", r.stderr)
+        self.assertIn("routes must be a non-empty list", r.stderr)
+
+    def test_locked_cli_plan_fails_closed_and_stub_records_invocation(self):
+        r = self.agent_eval(
+            "import agent, plans\n"
+            "try:\n"
+            "    agent.resolve_plan_dispatch('anthropic-max', "
+            "{'kind': 'api', 'endpoint': 'https://api.anthropic.com/v1/messages'})\n"
+            "except agent.PlanLockError as exc:\n"
+            "    print(type(exc).__name__)\n"
+            "    print(exc)\n"
+            "d = agent.resolve_plan_dispatch('anthropic-max', "
+            "{'kind': 'cli', 'harness': 'claude'})\n"
+            "print(d.plan_id, d.route.key, d.model)\n"
+            "print(' '.join(plans.cli_invocation(d.route, d.model)))",
+            env=self.env(PLAN_CODER_CONFIG=str(
+                REPO / "config" / "deployment.example.json")))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        lines = r.stdout.splitlines()
+        self.assertEqual(lines[0], "PlanLockError")
+        self.assertIn("anthropic-max", lines[1])
+        self.assertIn("allowed routes: cli:claude", lines[1])
+        self.assertEqual(lines[2],
+                         "anthropic-max cli:claude claude-sonnet-4-5")
+        self.assertEqual(lines[3], "claude --model claude-sonnet-4-5")
+
+        # The only CLI implementation in this slice is a credential-free
+        # stub.  It records what a runner would invoke; it never runs it.
+        record = self.tmp / "cli-invocation.json"
+        stub = self.run_bin(
+            "plan_cli_stub.py", "--harness", "claude",
+            "--model", "claude-sonnet-4-5", "--record", str(record))
+        self.assertEqual(stub.returncode, 0, stub.stdout + stub.stderr)
+        recorded = json.loads(record.read_text())
+        self.assertTrue(recorded["stub"])
+        self.assertEqual(recorded["argv"],
+                         ["claude", "--model", "claude-sonnet-4-5"])
+
+    def test_example_config_expresses_api_and_locked_cli_plans(self):
+        r = self.agent_eval(
+            "import agent, json; print(json.dumps([{"
+            "'id': p.id, 'vendor': p.vendor, "
+            "'routes': [x.key for x in p.routes], "
+            "'locked_to': [x.key for x in p.locked_to]} "
+            "for p in agent.PLANS])); "
+            "print(agent.resolve_dispatch('minimax', 'api', tier='cheap').model); "
+            "print(agent.resolve_dispatch('zai', 'api', tier='flagship').model)",
+            env=self.env(PLAN_CODER_CONFIG=str(
+                REPO / "config" / "deployment.example.json")))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        lines = r.stdout.splitlines()
+        data = json.loads(lines[0])
+        self.assertEqual(lines[1:], ["MiniMax-M2.5-highspeed", "glm-5.3"])
+        self.assertEqual([plan["id"] for plan in data],
+                         ["minimax", "zai", "anthropic-max"])
+        self.assertEqual(data[0]["routes"], [
+            "api:https://api.minimax.io/v1/chat/completions"])
+        self.assertEqual(data[1]["routes"], [
+            "api:https://api.z.ai/api/coding/paas/v4/chat/completions"])
+        self.assertEqual(data[2]["routes"], [
+            "cli:claude", "api:https://api.anthropic.com/v1/messages"])
+        self.assertEqual(data[2]["locked_to"], ["cli:claude"])
 
 
 class TestAuth(TreeCase):
@@ -1220,7 +1327,7 @@ class TestJittest(TreeCase):
                          {"env_failure": 1})
         self.assertEqual(row["judge"]["catch"], 1)
         self.assertEqual(row["survived"], 1)
-        self.assertEqual(row["alex_disposition"], "pending")
+        self.assertEqual(row["operator_disposition"], "pending")
         self.assertEqual(row["label_adjudication"]
                          ["ground_truth"], "clean")
         self.assertEqual(row["label_adjudication"]
@@ -1526,7 +1633,7 @@ class TestShepherdLedger(unittest.TestCase):
                         "--outcome", "merged", "--merge-state", "UNSTABLE")
         self.assertEqual(r.returncode, 0, r.stderr)
         r = self.run_sl("append", "--repo", "beta", "--pr", "3",
-                        "--action", "needs_alex", "--outcome", "physics")
+                        "--action", "needs_operator", "--outcome", "physics")
         self.assertEqual(r.returncode, 0, r.stderr)
         rows = [json.loads(x) for x in
                 self.ledger.read_text().splitlines()]
@@ -1539,7 +1646,7 @@ class TestShepherdLedger(unittest.TestCase):
         self.assertEqual(data["rows"], 3)
         self.assertEqual(data["merges"], 1)
         self.assertEqual(data["unstable_merges"], 1)
-        self.assertEqual(data["needs_alex_distinct_prs"], 1)
+        self.assertEqual(data["needs_operator_distinct_prs"], 1)
 
     def test_summary_missing_ledger_exits_2(self):
         r = self.run_sl("summary")
@@ -1565,6 +1672,178 @@ class TestDryRun(unittest.TestCase):
         self.assertIn("DRY RUN OK", r.stdout)
         self.assertIn("DRY_RUN.md", r.stdout)
         shutil.rmtree(home, ignore_errors=True)
+class TestProofReceipt(unittest.TestCase):
+    """The proof-packet receipt: presence/gaps per PR + coverage."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="pc-receipt-"))
+        self.ledger = self.tmp / "receipts.jsonl"
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def run_rc(self, *argv):
+        return subprocess.run(
+            [sys.executable, str(REPO / "bin" / "receipt.py"), *argv],
+            capture_output=True, text=True, timeout=60)
+
+    def test_check_reports_present_gaps_and_absent(self):
+        r = self.run_rc("check", "--required", "a,b", "--present", "a,b",
+                        "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(json.loads(r.stdout)["proof"], "present")
+
+        r = self.run_rc("check", "--required", "a,b", "--present", "a",
+                        "--json")
+        data = json.loads(r.stdout)
+        self.assertEqual(data["proof"], "gaps")
+        self.assertEqual(data["gap_lines"], ["proof gap: b"])
+
+        r = self.run_rc("check", "--required", "a", "--present", "",
+                        "--json")
+        data = json.loads(r.stdout)
+        self.assertEqual(data["proof"], "absent")
+        self.assertEqual(data["gap_lines"], ["proof gap: a"])
+
+    def test_check_marks_not_available_with_reason(self):
+        r = self.run_rc("check", "--required", "before screenshot",
+                        "--present", "",
+                        "--not-available", "before screenshot (no display)",
+                        "--json")
+        data = json.loads(r.stdout)
+        # an explicitly recorded unavailable item is a known gap, not a
+        # silent absence — the receipt names it and the reason
+        self.assertEqual(data["proof"], "gaps")
+        self.assertEqual(
+            data["gap_lines"],
+            ["proof gap: before screenshot (not available: no display)"])
+
+    def test_record_and_summary_report_coverage_over_window(self):
+        r = self.run_rc("record", "--repo", "you/alpha", "--pr", "1",
+                        "--url", "https://example/pr/1", "--type", "visual",
+                        "--required", "before screenshot,after screenshot",
+                        "--present", "before screenshot,after screenshot",
+                        "--ledger", str(self.ledger))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = self.run_rc("record", "--repo", "you/beta", "--pr", "2",
+                        "--type", "numeric", "--required", "before numbers",
+                        "--present", "", "--not-available",
+                        "before numbers (no baseline run)",
+                        "--ledger", str(self.ledger))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        rows = [json.loads(x) for x in self.ledger.read_text().splitlines()]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual([r["proof"] for r in rows], ["present", "gaps"])
+        self.assertTrue(all("ts" in r for r in rows))
+
+        r = self.run_rc("summary", "--ledger", str(self.ledger), "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        data = json.loads(r.stdout)
+        self.assertEqual(data["prs"], 2)
+        self.assertEqual(data["by_proof"]["present"], 1)
+        self.assertEqual(data["by_proof"]["gaps"], 1)
+        self.assertEqual(data["required_prs"], 2)
+        self.assertEqual(data["coverage_pct"], 50.0)
+        self.assertEqual(data["gap_prs"][0]["gaps"], ["before numbers"])
+
+        # window: a --since far in the future empties the window
+        r = self.run_rc("summary", "--ledger", str(self.ledger),
+                        "--since", "2999-01-01", "--json")
+        data = json.loads(r.stdout)
+        self.assertEqual(data["prs"], 0)
+        self.assertIsNone(data["coverage_pct"])
+
+    def test_summary_missing_ledger_exits_2(self):
+        r = self.run_rc("summary", "--ledger", str(self.ledger))
+        self.assertEqual(r.returncode, 2)
+
+
+class TestProofPromptAndExamples(unittest.TestCase):
+    """The supervisor prompt assembles the Proof section; examples show it."""
+
+    def prompt(self):
+        return (REPO / "prompts" / "backlog-supervisor.md").read_text()
+
+    def test_prompt_has_step7_proof_assembly(self):
+        text = self.prompt()
+        self.assertIn("7-proof.", text)
+        self.assertIn("## Proof", text)
+        self.assertIn("proof gap:", text)
+        self.assertIn("bin/receipt.py record", text)
+        self.assertIn("bin/receipt.py check", text)
+        # the brief must carry a PROOF: expectation
+        self.assertIn("PROOF:", text)
+
+    def test_rendered_prompt_keeps_proof_instructions(self):
+        tmp = Path(tempfile.mkdtemp(prefix="pc-proof-render-"))
+        try:
+            config = tmp / "deployment.json"
+            config.write_text(json.dumps(FULL_CONFIG))
+            out = tmp / "out"
+            r = subprocess.run(
+                [sys.executable, str(REPO / "bin" / "render_prompts.py"),
+                 "--config", str(config), "--out", str(out)],
+                capture_output=True, text=True, timeout=120)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            sup = (out / "backlog-supervisor.rendered.md").read_text()
+            self.assertNotIn("{{", sup)
+            self.assertIn("7-proof.", sup)
+            self.assertIn("proof gap:", sup)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_examples_show_proof_for_visual_and_numeric_repos(self):
+        brief = (REPO / "examples" / "BRIEF.example.md").read_text()
+        self.assertIn("PROOF:", brief)
+        self.assertIn("type=numeric", brief)
+        brief_visual = (REPO / "examples" / "BRIEF.visual.example.md").read_text()
+        self.assertIn("PROOF:", brief_visual)
+        self.assertIn("type=visual", brief_visual)
+        visual = (REPO / "examples" / "PR_BODY.visual.example.md").read_text()
+        numeric = (REPO / "examples" / "PR_BODY.numeric.example.md").read_text()
+        for body in (visual, numeric):
+            self.assertIn("## Proof", body)
+            self.assertIn("Provider/tier:", body)
+            self.assertIn("diffstat", body)
+        self.assertIn("before", visual)
+        self.assertIn("after", visual)
+        self.assertIn("| case | before | after |", numeric)
+
+    def test_example_briefs_declare_the_type_the_pr_body_shows(self):
+        pairs = (("BRIEF.visual.example.md", "PR_BODY.visual.example.md"),
+                 ("BRIEF.example.md", "PR_BODY.numeric.example.md"))
+        for brief_name, body_name in pairs:
+            brief = (REPO / "examples" / brief_name).read_text()
+            body = (REPO / "examples" / body_name).read_text()
+            kind = re.search(r"PROOF: type=(\w+)", brief).group(1)
+            self.assertIn(kind, brief)
+            # the PR body's proof material matches the declared type
+            if kind == "visual":
+                self.assertIn("Before/after", body)
+            elif kind == "numeric":
+                self.assertIn("Headline numbers", body)
+
+    def test_example_with_missing_proof_states_the_gap(self):
+        gap = (REPO / "examples" / "PR_BODY.gap.example.md").read_text()
+        self.assertIn("## Proof", gap)
+        self.assertIn("proof gap:", gap)
+        # the gap brief requires the numbers the gap example could not produce
+        brief = (REPO / "examples" / "BRIEF.gap.example.md").read_text()
+        self.assertIn("PROOF:", brief)
+        self.assertIn("drop_5m", brief)
+        # the gap example's line is the one receipt.py itself produces
+        r = subprocess.run(
+            [sys.executable, str(REPO / "bin" / "receipt.py"), "check",
+             "--required", "before numbers for the case `drop_5m`",
+             "--present", "",
+             "--not-available",
+             "before numbers for the case `drop_5m` (no baseline run was "
+             "captured in the worktree)",
+             "--json"],
+            capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        gap_line = json.loads(r.stdout)["gap_lines"][0]
+        self.assertIn(gap_line, gap)
 
 
 if __name__ == "__main__":
