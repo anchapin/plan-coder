@@ -28,6 +28,17 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
+from plans import (
+    DeploymentConfigError,
+    Plan,
+    PlanLockError,
+    Route,
+    RouteResolutionError,
+    plans_from_config,
+    resolve_dispatch as _resolve_dispatch,
+    validate_plans,
+)
+
 PROVIDERS = {
     "zai": {
         "chat_url": "https://api.z.ai/api/coding/paas/v4/chat/completions",
@@ -78,10 +89,15 @@ def _load_deployment_config() -> dict:
         try:
             with open(path, encoding="utf-8") as fh:
                 data = json.load(fh)
-            if isinstance(data, dict):
-                return data
         except Exception:  # noqa: BLE001 - config is a convenience, not a gate
             continue
+        if isinstance(data, dict):
+            # A syntactically valid config with malformed plan data is an
+            # operator error, not a missing optional setting.  Validate it
+            # outside the parse guard so DeploymentConfigError is not
+            # silently swallowed (or replaced by another config candidate).
+            validate_plans(data)
+            return data
     return {}
 
 
@@ -104,6 +120,55 @@ for _pname, _prov in PROVIDERS.items():
     _env_key = _cfg("providers", _pname, "env_key")
     if _env_key:
         _prov["env_key"] = _env_key
+
+
+# Plans are the capacity unit.  With no explicit plans section, every
+# legacy provider is represented as one API-only plan, preserving the old
+# provider order, model tiers, and failover behavior exactly.
+_plans = plans_from_config(DEPLOYMENT, PROVIDERS)
+_plan_order = _cfg("workers", "plan_order")
+if not _plan_order:
+    if "plans" in DEPLOYMENT:
+        # Explicit capacity plans keep their declaration order.
+        _plan_order = [plan.id for plan in _plans]
+    else:
+        # Legacy API plans retain the configured provider order.
+        _plan_order = (_cfg("workers", "provider_order")
+                       or list(PROVIDERS))
+if not isinstance(_plan_order, list):
+    _plan_order = ([plan.id for plan in _plans]
+                   if "plans" in DEPLOYMENT else list(PROVIDERS))
+_plan_by_id = {plan.id: plan for plan in _plans}
+PLANS = (
+    tuple(plan for plan_id in _plan_order
+          for plan in (_plan_by_id.get(plan_id),) if plan is not None)
+    + tuple(plan for plan in _plans if plan.id not in _plan_order)
+)
+PLAN_BY_ID = {plan.id: plan for plan in PLANS}
+
+
+def resolve_dispatch(plan_or_id: Plan | str,
+                     requested_route: Route | dict | str,
+                     tier: str = "balanced",
+                     model: str | None = None):
+    """Resolve a dispatch by plan id (or normalized plan) with lock checks."""
+    if isinstance(plan_or_id, str):
+        plan = PLAN_BY_ID.get(plan_or_id)
+        if plan is None:
+            raise RouteResolutionError(
+                f"unknown plan {plan_or_id!r}; configured plans: "
+                f"{', '.join(PLAN_BY_ID) or '(none)'}")
+    else:
+        plan = plan_or_id
+    return _resolve_dispatch(plan, requested_route, tier=tier, model=model)
+
+
+def resolve_plan_dispatch(plan_id: str,
+                          requested_route: Route | dict | str,
+                          tier: str = "balanced",
+                          model: str | None = None):
+    """Resolve a plan dispatch and fail closed on a harness-lock mismatch."""
+    return resolve_dispatch(plan_id, requested_route, tier=tier, model=model)
 
 
 SYSTEM_PROMPT = """You are a coding worker operating inside a single project
