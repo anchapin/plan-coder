@@ -158,7 +158,7 @@
   },
   "merge_policy": {
     "known_failures": "<required-checks drift>, <regression tracked in #NNNN>",
-    "hard_stop_domain": "simulation/physics outputs",
+    "hard_stop_domain": "<your domain-judgment area, e.g. numeric outputs>",
     "directive_quote": "<your aggressive-merge directive, quoted>",
     "directive_date": "<YYYY-MM-DD>"
   },
@@ -186,7 +186,7 @@
       "schedule": {
         "kind": "interval",
         "every": "2h",
-        "timezone": "America/New_York"
+        "timezone": "UTC"
       },
       "owner": "goal:<your-goal-slug>",
       "timeout_secs": 10800
@@ -196,7 +196,7 @@
       "schedule": {
         "kind": "interval",
         "every": "30m",
-        "timezone": "America/New_York"
+        "timezone": "UTC"
       },
       "owner": "goal:<your-goal-slug>",
       "timeout_secs": 3600
@@ -208,7 +208,7 @@
         "dow": [
           "Sun"
         ],
-        "time": "13:06:00",
+        "time": "03:00:00",
         "timezone": "@user.current"
       },
       "owner": "goal:<your-goal-slug>",

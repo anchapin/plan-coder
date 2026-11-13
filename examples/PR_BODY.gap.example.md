@@ -1,6 +1,6 @@
 # Sample PR body — a brief-required proof item is missing (worked gap example)
 
-Repo: `you/fluxion` · Issue #1301 · PR: https://github.com/you/fluxion/pull/1307
+Repo: `you/repo-a` · Issue #1301 · PR: https://github.com/you/repo-a/pull/1307
 
 Fixes #1301 — the damping solver ignored the new per-axis drag coefficient.
 

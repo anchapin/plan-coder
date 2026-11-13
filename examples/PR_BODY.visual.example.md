@@ -1,6 +1,6 @@
 # Sample PR body — visual repo (`gh pr create --title "..." --body-file PR_BODY.md`)
 
-Repo: `you/atlas-ui` · Issue #412 · PR: https://github.com/you/atlas-ui/pull/417
+Repo: `you/repo-b` · Issue #412 · PR: https://github.com/you/repo-b/pull/417
 
 Fixes #412 — the settings page painted the default blue accent for one frame before applying the saved colour.
 

@@ -1172,7 +1172,7 @@ def ledger_row(policy: dict, args) -> dict:
                       args.judge_discarded_no_evidence},
         "survived": args.survived,
         "tokens_out": args.tokens_out,
-        "alex_disposition": args.alex_disposition,
+        "operator_disposition": args.operator_disposition,
         "label_adjudication": {
             "ground_truth": args.label_ground_truth,
             "adjudicated_by": args.label_adjudicated_by,
@@ -1294,7 +1294,7 @@ def main(argv=None) -> int:
                    default=0)
     p.add_argument("--survived", type=int, default=0)
     p.add_argument("--tokens-out", type=int, default=0)
-    p.add_argument("--alex-disposition", default="pending")
+    p.add_argument("--operator-disposition", default="pending")
     p.add_argument("--label-ground-truth", default="unlabelled")
     p.add_argument("--label-adjudicated-by", default="")
     p.add_argument("--label-note", default="")
