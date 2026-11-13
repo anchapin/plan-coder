@@ -1327,7 +1327,7 @@ class TestJittest(TreeCase):
                          {"env_failure": 1})
         self.assertEqual(row["judge"]["catch"], 1)
         self.assertEqual(row["survived"], 1)
-        self.assertEqual(row["alex_disposition"], "pending")
+        self.assertEqual(row["operator_disposition"], "pending")
         self.assertEqual(row["label_adjudication"]
                          ["ground_truth"], "clean")
         self.assertEqual(row["label_adjudication"]
@@ -1633,7 +1633,7 @@ class TestShepherdLedger(unittest.TestCase):
                         "--outcome", "merged", "--merge-state", "UNSTABLE")
         self.assertEqual(r.returncode, 0, r.stderr)
         r = self.run_sl("append", "--repo", "beta", "--pr", "3",
-                        "--action", "needs_alex", "--outcome", "physics")
+                        "--action", "needs_operator", "--outcome", "physics")
         self.assertEqual(r.returncode, 0, r.stderr)
         rows = [json.loads(x) for x in
                 self.ledger.read_text().splitlines()]
@@ -1646,7 +1646,7 @@ class TestShepherdLedger(unittest.TestCase):
         self.assertEqual(data["rows"], 3)
         self.assertEqual(data["merges"], 1)
         self.assertEqual(data["unstable_merges"], 1)
-        self.assertEqual(data["needs_alex_distinct_prs"], 1)
+        self.assertEqual(data["needs_operator_distinct_prs"], 1)
 
     def test_summary_missing_ledger_exits_2(self):
         r = self.run_sl("summary")

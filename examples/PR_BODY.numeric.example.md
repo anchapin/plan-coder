@@ -1,6 +1,6 @@
 # Sample PR body — numeric repo (`gh pr create --title "..." --body-file PR_BODY.md`)
 
-Repo: `you/fluxion` · Issue #1234 · PR: https://github.com/you/fluxion/pull/1240
+Repo: `you/repo-a` · Issue #1234 · PR: https://github.com/you/repo-a/pull/1240
 
 Fixes #1234 — the retry client slept a fixed 1s between attempts, so a flaky backend turned one slow call into a 60s request.
 

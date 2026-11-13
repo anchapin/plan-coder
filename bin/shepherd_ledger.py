@@ -19,7 +19,7 @@ no-dependency operation.
 
 Usage:
     python3 bin/shepherd_ledger.py append --repo <slug> --pr <n>
-        --action rerun|fix_attempt|merged|merged_by_shepherd|needs_alex|
+        --action rerun|fix_attempt|merged|merged_by_shepherd|needs_operator|
                  closed_unmerged|merge_conflicts|trigger_requested|
                  checked|snapshot|other
         [--url <pr url>] [--outcome <text>] [--ci <summary>]
@@ -44,7 +44,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from trace_summary import default_ledger_path  # noqa: E402
 
 ACTIONS = ("rerun", "fix_attempt", "merged", "merged_by_shepherd",
-           "needs_alex", "closed_unmerged", "merge_conflicts",
+           "needs_operator", "closed_unmerged", "merge_conflicts",
            "trigger_requested", "checked", "snapshot", "other")
 MERGE_ACTIONS = ("merged", "merged_by_shepherd")
 
@@ -75,7 +75,7 @@ def summarize(ledger_path: str, since: str | None = None) -> dict:
     by_repo = Counter()
     merges = 0
     unstable_merges = 0
-    needs_alex_prs = set()
+    needs_operator_prs = set()
     fix_attempt_prs = set()
     with open(ledger_path, encoding="utf-8") as fh:
         for line in fh:
@@ -99,8 +99,8 @@ def summarize(ledger_path: str, since: str | None = None) -> dict:
                 merges += 1
                 if str(row.get("merge_state") or "").upper() == "UNSTABLE":
                     unstable_merges += 1
-            if action == "needs_alex":
-                needs_alex_prs.add((row.get("repo"), row.get("pr")))
+            if action == "needs_operator":
+                needs_operator_prs.add((row.get("repo"), row.get("pr")))
             if action == "fix_attempt":
                 fix_attempt_prs.add((row.get("repo"), row.get("pr")))
     return {
@@ -109,7 +109,7 @@ def summarize(ledger_path: str, since: str | None = None) -> dict:
         "by_outcome": dict(by_outcome.most_common()),
         "by_repo": dict(by_repo.most_common()),
         "merges": merges, "unstable_merges": unstable_merges,
-        "needs_alex_distinct_prs": len(needs_alex_prs),
+        "needs_operator_distinct_prs": len(needs_operator_prs),
         "fix_attempt_distinct_prs": len(fix_attempt_prs),
     }
 
@@ -165,8 +165,8 @@ def main(argv=None) -> int:
         print(f"  by action: {result['by_action']}")
         print(f"  by outcome: {result['by_outcome']}")
         print(f"  by repo: {result['by_repo']}")
-        print(f"  needs_alex distinct PRs: "
-              f"{result['needs_alex_distinct_prs']}; "
+        print(f"  needs_operator distinct PRs: "
+              f"{result['needs_operator_distinct_prs']}; "
               f"fix-attempt distinct PRs: "
               f"{result['fix_attempt_distinct_prs']}")
     return 0
