@@ -1869,5 +1869,50 @@ class TestProofPromptAndExamples(unittest.TestCase):
         self.assertIn(gap_line, gap)
 
 
+class TestShepherdMicroRules(unittest.TestCase):
+    """The two cheap Q5 blanks the task register (issue #25) found.
+
+    Both micro-rules live in the shepherd prompt TEMPLATE — the source
+    the rendered cron body is produced from.
+    """
+
+    RELAY = ("only the session that verified the supervisor idle clears "
+             "`pending_trigger`, immediately after `cron.run` returns")
+    HEAD_SHA = "never merge on a stale check"
+
+    def template(self):
+        return (REPO / "prompts" / "pr-shepherd.md").read_text()
+
+    def test_relay_exactly_once_rule_is_in_the_trigger_step(self):
+        text = self.template()
+        self.assertIn(self.RELAY, text)
+        # the rule belongs to the step where the relay is specified
+        step4 = text.split("4. Supervisor trigger", 1)[1]
+        self.assertIn(self.RELAY, step4)
+
+    def test_merge_step_rechecks_the_head_sha(self):
+        text = self.template()
+        self.assertIn(self.HEAD_SHA, text)
+        self.assertIn("headRefOid", text)
+
+    def test_rendered_prompt_keeps_both_micro_rules(self):
+        tmp = Path(tempfile.mkdtemp(prefix="pc-micro-rules-"))
+        try:
+            config = tmp / "deployment.json"
+            config.write_text(json.dumps(FULL_CONFIG))
+            out = tmp / "out"
+            r = subprocess.run(
+                [sys.executable, str(REPO / "bin" / "render_prompts.py"),
+                 "--config", str(config), "--out", str(out)],
+                capture_output=True, text=True, timeout=120)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            shep = (out / "pr-shepherd.rendered.md").read_text()
+            self.assertNotIn("{{", shep)
+            self.assertIn(self.RELAY, shep)
+            self.assertIn(self.HEAD_SHA, shep)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()
