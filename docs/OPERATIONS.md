@@ -29,6 +29,25 @@ Every brief also carries a **code discipline** section:
 
 Repo-specific addenda belong in the brief, not in the worker: e.g. if a repo has generated inventories or baseline ratchets, the brief must name the regeneration commands and the gate that checks them.
 
+### Structured diagnostics in repair loops
+
+A repair loop is where a worker reacts to a failing build or test. The briefs now name the repo's structured-diagnostics command, and workers are told to feed **parsed** output — not a raw dump — into the next repair turn:
+
+| Repo kind | Structured command |
+|---|---|
+| Rust | `cargo check --message-format=json` |
+| Python | `ruff check --output-format=json` (older ruff: `ruff --output-format=json`), `pytest --tb=short -q` |
+
+The point is turn economy: a JSON stream filtered down to the failing items (file, line, code, message) tells the worker what to fix in one turn, where a wall of raw output usually costs three. The same rule applies to the shepherd's mechanical fix-attempt brief.
+
+**How it will be measured.** The before/after comparison is harness-tune's job, not a manual step for a worker or the supervisor. harness-tune will compare, over a two-week window before and a two-week window after the template change:
+
+- **repair-turn count on failed-CI issues** — the number of worker turns spent re-running a failing verification command on issues whose CI failed, read from the worker transcripts and the shepherd ledger (`fix_attempt` rows), not from prose;
+- **tokens_out per PR** and the failed-CI rate over the same windows, so a shorter repair loop that just burns more tokens is visible;
+- the same numbers split by repo kind (Rust vs Python), since the structured commands differ.
+
+If repair-turn count on failed-CI issues does not fall, or tokens_out per PR rises, the template change is evidence-negative and the tune pass reverts it.
+
 ## Tier routing
 
 | Tier | Use for | z.ai | MiniMax |

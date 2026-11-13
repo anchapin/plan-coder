@@ -353,6 +353,29 @@ class TestRendering(TreeCase):
             self.assertEqual(entry["delivery"], [{"chat_id": "chat-123"}],
                              cron_id)
 
+    def test_render_has_structured_diagnostics_wiring(self):
+        """Worker-facing templates tell workers to run the structured
+        diagnostics commands and feed parsed output into repair turns."""
+        out = self.tmp / "out-json-diag"
+        r = self.run_bin("render_prompts.py", "--out", str(out))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        sup = (out / "backlog-supervisor.rendered.md").read_text()
+        # The brief template names the structured commands per repo kind.
+        self.assertIn("cargo check --message-format=json", sup)
+        self.assertIn("ruff check --output-format=json", sup)
+        self.assertIn("pytest --tb=short -q", sup)
+        # ... and requires parsed, filtered output, not a raw dump.
+        self.assertIn("PARSED diagnostics, never a raw dump", sup)
+        self.assertIn("feed only that filtered set into the next repair turn",
+                      sup)
+        self.assertNotIn("{{", sup)
+        shep = (out / "pr-shepherd.rendered.md").read_text()
+        self.assertIn("cargo check --message-format=json", shep)
+        self.assertIn("ruff check --output-format=json", shep)
+        self.assertIn("pytest --tb=short -q", shep)
+        self.assertIn("PARSED diagnostics, not the raw CI log", shep)
+        self.assertNotIn("{{", shep)
+
 
 class TestPublishGateMechanism(unittest.TestCase):
     """The publish gate scans `git ls-files --cached --others
