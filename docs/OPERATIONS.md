@@ -106,6 +106,12 @@ When the queue drains or a PR merges, the shepherd queues the next supervisor cy
 - **Flagged, never applied autonomously:** restructures, provider/auth changes, parallelism and scheduling changes.
 - External ideas (papers, other harnesses, architecture reviews) enter as *candidate briefs*: each idea is marked small-edit or flag-for-human, checked against the current baseline so existing features aren't re-proposed, and annotated with the outcome once the pass disposes of it.
 
+## Factory failures as tickets (Fix-lite)
+
+- A cron run that fails can be turned into a ticket by `bin/factory_failure_tickets.py`: it reads a failure record (JSON on stdin or `--input`, or CLI flags), computes a normalized fingerprint (timestamps, run ids, paths and numbers normalized out), and via the `gh` CLI either appends a recurrence comment to the open auto-filed issue with that fingerprint or files exactly one new issue (title prefix `[factory-failure]`, label `auto-filed`, machine-readable `factory-failure-fingerprint: <hex>` line, at most a 30-line error excerpt).
+- It is a **ticket source only** — nothing is fixed automatically, and the supervisor skips auto-filed issues until a human triages them and removes the marker.
+- Fail-silent towards the factory: `gh`/GitHub failure files nothing and exits 3; a failure of the capture step itself exits 2 with a plain message and files nothing (in particular never an issue about itself).
+
 ## Safety rails
 
 - Never run two git-writing workers in one tree. Never trust a stale ref — fetch before branching.
