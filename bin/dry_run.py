@@ -56,7 +56,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     calls = 0
 
-    def do_POST(self):  # noqa: N802 - http.server API
+    def do_POST(self):
         length = int(self.headers.get("Content-Length") or 0)
         self.rfile.read(length)
         type(self).calls += 1
@@ -157,7 +157,7 @@ def main() -> int:
         url = "http://127.0.0.1:%d/chat" % srv.server_address[1]
 
         sys.path.insert(0, HERE)
-        import agent  # noqa: E402  (import after sys.path setup)
+        import agent
 
         provider = agent.PROVIDERS[args.provider]
         provider["chat_url"] = url
