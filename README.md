@@ -119,6 +119,8 @@ The live system's private state — the real metrics ledger, transcripts, PR-tra
 
 Working system, actively used; published as a reference implementation and a starting point, not a packaged product. The worker loop is stable; the prompts are living documents that the weekly tuning pass keeps editing.
 
+The theme-by-theme roadmap — plan adapters, quickstart, CI, external-CLI supervision, per-plan accounting, the brief-quality loop and the dashboard — with each theme's status and the dashboard's design is in [ROADMAP.md](ROADMAP.md).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
