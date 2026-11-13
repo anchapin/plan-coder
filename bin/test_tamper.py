@@ -53,7 +53,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from trace_summary import _load_deployment_config  # noqa: E402
+from trace_summary import _load_deployment_config
 
 # ---------------------------------------------------------------- paths
 
@@ -70,7 +70,13 @@ def is_test_path(path: str) -> bool:
     if not low:
         return False
     base = low.rsplit("/", 1)[-1]
-    if any(marker in low for marker in TEST_DIR_MARKERS):
+    # Changed-file lists are repo-relative ("tests/conftest.py"), so pad a
+    # leading slash before the directory-marker check: without it, a path
+    # that *starts* with a test directory never contains "/tests/" and
+    # non-test_-prefixed files under it (conftest, fixtures, helpers)
+    # evade the flag.
+    padded = low if low.startswith("/") else "/" + low
+    if any(marker in padded for marker in TEST_DIR_MARKERS):
         return True
     if base.startswith(TEST_FILE_PREFIXES):
         return True
@@ -127,7 +133,7 @@ def parse_diff(text: str) -> list[FileChange]:
             if current:
                 current.status = "D"
             continue
-        if raw.startswith("rename ") or raw.startswith("similarity "):
+        if raw.startswith(("rename ", "similarity ")):
             continue
         if raw.startswith("--- "):
             path = _strip_prefix(raw[4:].strip())
@@ -327,9 +333,9 @@ def analyze_file(change: FileChange) -> list[dict]:
                         "kind": "loosened_tolerance",
                         "file": change.path,
                         "count": 1,
-                        "evidence": [f"{change.path}:{add[0]}: loosened "
+                        "evidence": [(f"{change.path}:{add[0]}: loosened "
                                      f"tolerance: `{rem[1].strip()}` -> "
-                                     f"`{add[1].strip()}`"],
+                                     f"`{add[1].strip()}`")],
                     })
                     break
             else:
@@ -345,9 +351,9 @@ def analyze_file(change: FileChange) -> list[dict]:
                     "kind": "relaxed_comparison",
                     "file": change.path,
                     "count": 1,
-                    "evidence": [f"{change.path}:{add[0]}: relaxed "
+                    "evidence": [(f"{change.path}:{add[0]}: relaxed "
                                  f"comparison: `{rem[1].strip()}` -> "
-                                 f"`{add[1].strip()}`"],
+                                 f"`{add[1].strip()}`")],
                 })
 
     for rem, add in shape_pairs:
@@ -359,9 +365,9 @@ def analyze_file(change: FileChange) -> list[dict]:
                 "kind": "changed_expected_value",
                 "file": change.path,
                 "count": 1,
-                "evidence": [f"{change.path}:{add[0]}: changed expected "
+                "evidence": [(f"{change.path}:{add[0]}: changed expected "
                              f"value: `{rem[1].strip()}` -> "
-                             f"`{add[1].strip()}`"],
+                             f"`{add[1].strip()}`")],
             })
 
     # Form: a strict equality replaced by a looser assertion form.
@@ -388,8 +394,8 @@ def analyze_file(change: FileChange) -> list[dict]:
                 "kind": "added_skip",
                 "file": change.path,
                 "count": 1,
-                "evidence": [f"{change.path}:{line_no}: added skip/xfail: "
-                             f"`{text.strip()}`"],
+                "evidence": [(f"{change.path}:{line_no}: added skip/xfail: "
+                             f"`{text.strip()}`")],
             })
 
     return findings
@@ -459,8 +465,8 @@ def check(diff_text: str,
             "kind": "modified_test_file",
             "file": path,
             "count": 1,
-            "evidence": [f"{path}: existing test file modified without "
-                         f"brief authorization"],
+            "evidence": [(f"{path}: existing test file modified without "
+                         f"brief authorization")],
         })
         findings.extend(analyze_file(change))
 

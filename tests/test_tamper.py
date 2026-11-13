@@ -194,6 +194,26 @@ class TestTestTamperDetection(unittest.TestCase):
         self.assertFalse(result["flag"])
         self.assertEqual(result["inspected_test_files"], [])
 
+    def test_repo_relative_test_dir_paths_are_recognized(self):
+        # Regression (found by the PR's JiT review): changed-file lists are
+        # repo-relative, so a path starting with the test directory has no
+        # leading slash for the "/tests/" marker to match. Non-test_-named
+        # files under tests/ (conftest, fixtures) must still count as test
+        # paths, while lookalike source paths must not.
+        for path in ("tests/conftest.py", "tests/fixtures/sample.py",
+                     "test/helpers.py", "spec/support.py"):
+            self.assertTrue(test_tamper.is_test_path(path), path)
+        for path in ("src/totals.py", "src/tests_utils.py", "contest.py"):
+            self.assertFalse(test_tamper.is_test_path(path), path)
+
+    def test_weakened_conftest_flags(self):
+        diff = SEEDED_WEAKENING.replace(
+            "tests/test_totals.py", "tests/conftest.py")
+        result = test_tamper.check(
+            diff,
+            changed_files=[changed("M", "tests/conftest.py")])
+        self.assertTrue(result["flag"])
+
     def test_flag_output_is_one_line_reason_plus_evidence(self):
         result = test_tamper.check(
             SEEDED_WEAKENING,
@@ -224,7 +244,7 @@ class TestTestTamperCli(unittest.TestCase):
                "PLAN_CODER_CONFIG": str(config or (self.tmp / "none.json"))}
         return subprocess.run(
             [sys.executable, str(REPO / "bin" / "test_tamper.py"), *argv],
-            capture_output=True, text=True, env=env, timeout=60)
+            check=False, capture_output=True, text=True, env=env, timeout=60)
 
     def test_disabled_by_default_exits_2(self):
         r = self.run_check("--diff-file", str(self.diff))
@@ -296,6 +316,7 @@ class TestTestTamperWiring(unittest.TestCase):
 
     def test_prompt_renders_with_the_flag_disabled(self):
         import shutil
+
         from test_harness import FULL_CONFIG
         tmp = Path(tempfile.mkdtemp(prefix="pc-tamper-render-"))
         try:
@@ -307,7 +328,7 @@ class TestTestTamperWiring(unittest.TestCase):
             r = subprocess.run(
                 [sys.executable, str(REPO / "bin" / "render_prompts.py"),
                  "--config", str(cfg), "--out", str(out)],
-                capture_output=True, text=True, timeout=60)
+                check=False, capture_output=True, text=True, timeout=60)
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
             shep = (out / "pr-shepherd.rendered.md").read_text()
             self.assertIn("bin/test_tamper.py", shep)
