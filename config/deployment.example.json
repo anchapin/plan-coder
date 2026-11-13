@@ -154,7 +154,11 @@
     "trigger_cooldown_minutes": 30,
     "max_fix_attempts": 2,
     "trigger_note": "Adapt the trigger relay to your runner's mechanics.",
-    "final_note": ""
+    "final_note": "",
+    "test_tamper": {
+      "_about": "Test-tamper flag check (issue #15): a mechanical scan of a PR diff that flags a worker PR modifying or deleting EXISTING test files without brief authorization (removed assertions, loosened tolerances, added skips/xfails). Flags only — it never merges, never blocks by force and never edits the PR; a flagged PR is left for the operator. New test files alone are never a flag, and a brief that authorized test changes is never a flag. Ships disabled; enabling is a separate operator decision.",
+      "enabled": false
+    }
   },
   "merge_policy": {
     "known_failures": "<required-checks drift>, <regression tracked in #NNNN>",
