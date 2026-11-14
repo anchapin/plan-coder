@@ -1,0 +1,20 @@
+# C1 — No sys.path manipulation in main-pipeline code.
+#
+# Source of truth (matchline develop @ 522e18a):
+#   AGENTS.md:19          "No `sys.path` hacks." (Never-list)
+#   CONTRACT.md:30        "no `sys.path` hacks"
+#   docs/CODE-REVIEW.md:45  Anti-pattern: "sys.path manipulation"
+#
+# Rule scope: every mutation of sys.path (insert / append / extend).
+# Path scoping (detector/**, tests/**) is applied by the scan harness, not by
+# this rule — see bin/ast_grep_phase0_scan.py and the report for the rationale.
+id: c1-sys-path-manipulation
+language: python
+severity: error
+message: "sys.path manipulation is forbidden outside detector/** and tests/** (AGENTS.md Never-list)"
+note: "Use a package install / editable install instead of mutating sys.path."
+rule:
+  any:
+    - pattern: sys.path.insert($$$ARGS)
+    - pattern: sys.path.append($$$ARGS)
+    - pattern: sys.path.extend($$$ARGS)
