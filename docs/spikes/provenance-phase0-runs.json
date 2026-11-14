@@ -1,7 +1,7 @@
 {
   "metrics": {
     "aggregate_pct": 53.32167832167832,
-    "explainable": 13,
+    "explainable": 2,
     "ledger_rows": 574,
     "limit": 100,
     "mean_pct": 72.3,
@@ -17,7 +17,7 @@
     "total_changed": 572,
     "total_edit_calls": 1154,
     "verdict": "Park",
-    "verdict_reason": "aggregate coverage 53.3% < 70%; causes explainable 13/20"
+    "verdict_reason": "aggregate coverage 53.3% < 70%; causes explainable 2/20"
   },
   "precision": [
     {
@@ -7086,9 +7086,9 @@
       "additions": 485,
       "change_type": "ADDED",
       "deletions": 0,
-      "evidence": "PR reports the file as added; no edit/write call and no shell write command in the transcript names it",
+      "evidence": "PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed)",
       "file": "docs/spikes/headroom-phase0-runs.csv",
-      "label": "created_outside_worker_edits",
+      "label": "unknown",
       "pr": "47",
       "previous_path": null,
       "run_id": "plan-coder-22-1794638490"
@@ -7097,9 +7097,9 @@
       "additions": 70,
       "change_type": "ADDED",
       "deletions": 0,
-      "evidence": "PR reports the file as added; no edit/write call and no shell write command in the transcript names it",
+      "evidence": "PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed)",
       "file": "code-mode-mcp/README.md",
-      "label": "created_outside_worker_edits",
+      "label": "unknown",
       "pr": "61",
       "previous_path": null,
       "run_id": "building-ai-pocs-50-1794636900"
@@ -7108,9 +7108,9 @@
       "additions": 211,
       "change_type": "ADDED",
       "deletions": 0,
-      "evidence": "PR reports the file as added; no edit/write call and no shell write command in the transcript names it",
+      "evidence": "PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed)",
       "file": "tests/test_ponytail_phase0_landed.py",
-      "label": "created_outside_worker_edits",
+      "label": "unknown",
       "pr": "46",
       "previous_path": null,
       "run_id": "plan-coder-21-1794636400"
@@ -7119,9 +7119,9 @@
       "additions": 109,
       "change_type": "ADDED",
       "deletions": 0,
-      "evidence": "PR reports the file as added; no edit/write call and no shell write command in the transcript names it",
+      "evidence": "PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed)",
       "file": "docs/spikes/tokeneconomizer-phase0.md",
-      "label": "created_outside_worker_edits",
+      "label": "unknown",
       "pr": "44",
       "previous_path": null,
       "run_id": "plan-coder-28-1794634175"
@@ -7130,9 +7130,9 @@
       "additions": 781,
       "change_type": "ADDED",
       "deletions": 0,
-      "evidence": "PR reports the file as added; no edit/write call and no shell write command in the transcript names it",
+      "evidence": "PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed)",
       "file": "xias-ui-gates/REPORT.md",
-      "label": "created_outside_worker_edits",
+      "label": "unknown",
       "pr": "60",
       "previous_path": null,
       "run_id": "building-ai-pocs-54-1794630817"
@@ -7141,9 +7141,9 @@
       "additions": 401,
       "change_type": "ADDED",
       "deletions": 0,
-      "evidence": "PR reports the file as added; no edit/write call and no shell write command in the transcript names it",
+      "evidence": "PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed)",
       "file": "docs/spikes/ast-grep-matchline-phase0.md",
-      "label": "created_outside_worker_edits",
+      "label": "unknown",
       "pr": "43",
       "previous_path": null,
       "run_id": "plan-coder-42-1794630817"
@@ -7152,9 +7152,9 @@
       "additions": 125,
       "change_type": "ADDED",
       "deletions": 0,
-      "evidence": "PR reports the file as added; no edit/write call and no shell write command in the transcript names it",
+      "evidence": "PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed)",
       "file": "tests/test_damagetypes.py",
-      "label": "created_outside_worker_edits",
+      "label": "unknown",
       "pr": "443",
       "previous_path": null,
       "run_id": "portkit-v2-442-1794630817"
@@ -7163,9 +7163,9 @@
       "additions": 94,
       "change_type": "ADDED",
       "deletions": 0,
-      "evidence": "PR reports the file as added; no edit/write call and no shell write command in the transcript names it",
+      "evidence": "PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed)",
       "file": "media-qa-gate/README.md",
-      "label": "created_outside_worker_edits",
+      "label": "unknown",
       "pr": "59",
       "previous_path": null,
       "run_id": "building-ai-pocs-57-1794627254"
@@ -7196,9 +7196,9 @@
       "additions": 170,
       "change_type": "ADDED",
       "deletions": 0,
-      "evidence": "PR reports the file as added; no edit/write call and no shell write command in the transcript names it",
+      "evidence": "PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed)",
       "file": "docs/spikes/trajectory-coupling-phase0.md",
-      "label": "created_outside_worker_edits",
+      "label": "unknown",
       "pr": "40",
       "previous_path": null,
       "run_id": "plan-coder-38-1794621184"
@@ -7262,9 +7262,9 @@
       "additions": 57,
       "change_type": "ADDED",
       "deletions": 0,
-      "evidence": "PR reports the file as added; no edit/write call and no shell write command in the transcript names it",
+      "evidence": "PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed)",
       "file": "generative-ui-diagnostic-lens/real_runs/PROVENANCE.md",
-      "label": "created_outside_worker_edits",
+      "label": "unknown",
       "pr": "55",
       "previous_path": null,
       "run_id": "building-ai-pocs-53-1794612128"
@@ -7284,9 +7284,9 @@
       "additions": 602,
       "change_type": "ADDED",
       "deletions": 0,
-      "evidence": "PR reports the file as added; no edit/write call and no shell write command in the transcript names it",
+      "evidence": "PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed)",
       "file": "docs/spikes/filesize-ratchet-phase0.md",
-      "label": "created_outside_worker_edits",
+      "label": "unknown",
       "pr": "36",
       "previous_path": null,
       "run_id": "plan-coder-23-1794610079"

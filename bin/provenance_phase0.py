@@ -602,17 +602,23 @@ def classify_unattributed(entry: dict, steps: list[Step],
             return ("supervisor_post_run_edit",
                     "file added and the ledger note records a supervisor edit: "
                     + note[:140])
-        return ("created_outside_worker_edits",
-                ("PR reports the file as added; no edit/write call and no "
-                 "shell write command in the transcript names it"))
+        return ("unknown",
+                ("PR reports the file as added, but no edit/write call, "
+                 "no shell write command and no supervisor note explains "
+                 "it; absence of a worker edit is not evidence of an "
+                 "outside edit (issue #29 section 4: labelled by "
+                 "evidence, not guessed)"))
     if change_type == "REMOVED":
         if supervisor_says:
             return ("supervisor_post_run_edit",
                     "file removed and the ledger note records a supervisor "
                     "edit: " + note[:140])
-        return ("deleted_outside_worker_edits",
-                ("PR reports the file as deleted; no edit/write call and no "
-                 "shell write command names it"))
+        return ("unknown",
+                ("PR reports the file as deleted, but no edit/write call, "
+                 "no shell write command and no supervisor note explains "
+                 "it; absence of a worker edit is not evidence of an "
+                 "outside edit (issue #29 section 4: labelled by "
+                 "evidence, not guessed)"))
     if change_type == "RENAMED":
         return ("renamed_file", "PR reports the file as renamed")
     if supervisor_says:

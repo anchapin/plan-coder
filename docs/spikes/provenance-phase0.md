@@ -20,7 +20,7 @@ the **provenance index** of issue #29 is worth building (Phase 1).
 | per-PR median coverage | 100.0 |
 | per-PR mean coverage | 72.3 |
 | precision spot-check | 20/20 |
-| unattributed subsample | 20 files, 13/20 explainable |
+| unattributed subsample | 20 files, 2/20 explainable |
 | reason-excerpt yield | 82.0% |
 
 **Definitions.**
@@ -162,25 +162,25 @@ the record does not support a cause.
 | run_id | pr | file | change | label | evidence |
 |---|---|---|---|---|---|
 | plan-coder-5-1794639685 | 48 | `.gitignore` | MODIFIED | unknown | no edit/write call, no shell write command and no PR metadata explains it |
-| plan-coder-22-1794638490 | 47 | `docs/spikes/headroom-phase0-runs.csv` | ADDED | created_outside_worker_edits | PR reports the file as added; no edit/write call and no shell write command in the transcript names it |
-| building-ai-pocs-50-1794636900 | 61 | `code-mode-mcp/README.md` | ADDED | created_outside_worker_edits | PR reports the file as added; no edit/write call and no shell write command in the transcript names it |
-| plan-coder-21-1794636400 | 46 | `tests/test_ponytail_phase0_landed.py` | ADDED | created_outside_worker_edits | PR reports the file as added; no edit/write call and no shell write command in the transcript names it |
-| plan-coder-28-1794634175 | 44 | `docs/spikes/tokeneconomizer-phase0.md` | ADDED | created_outside_worker_edits | PR reports the file as added; no edit/write call and no shell write command in the transcript names it |
-| building-ai-pocs-54-1794630817 | 60 | `xias-ui-gates/REPORT.md` | ADDED | created_outside_worker_edits | PR reports the file as added; no edit/write call and no shell write command in the transcript names it |
-| plan-coder-42-1794630817 | 43 | `docs/spikes/ast-grep-matchline-phase0.md` | ADDED | created_outside_worker_edits | PR reports the file as added; no edit/write call and no shell write command in the transcript names it |
-| portkit-v2-442-1794630817 | 443 | `tests/test_damagetypes.py` | ADDED | created_outside_worker_edits | PR reports the file as added; no edit/write call and no shell write command in the transcript names it |
-| building-ai-pocs-57-1794627254 | 59 | `media-qa-gate/README.md` | ADDED | created_outside_worker_edits | PR reports the file as added; no edit/write call and no shell write command in the transcript names it |
+| plan-coder-22-1794638490 | 47 | `docs/spikes/headroom-phase0-runs.csv` | ADDED | unknown | PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed) |
+| building-ai-pocs-50-1794636900 | 61 | `code-mode-mcp/README.md` | ADDED | unknown | PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed) |
+| plan-coder-21-1794636400 | 46 | `tests/test_ponytail_phase0_landed.py` | ADDED | unknown | PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed) |
+| plan-coder-28-1794634175 | 44 | `docs/spikes/tokeneconomizer-phase0.md` | ADDED | unknown | PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed) |
+| building-ai-pocs-54-1794630817 | 60 | `xias-ui-gates/REPORT.md` | ADDED | unknown | PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed) |
+| plan-coder-42-1794630817 | 43 | `docs/spikes/ast-grep-matchline-phase0.md` | ADDED | unknown | PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed) |
+| portkit-v2-442-1794630817 | 443 | `tests/test_damagetypes.py` | ADDED | unknown | PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed) |
+| building-ai-pocs-57-1794627254 | 59 | `media-qa-gate/README.md` | ADDED | unknown | PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed) |
 | building-ai-pocs-56-1794626301 | 58 | `check-answerable/README.md` | ADDED | worker_shell_edit | exec step writes the file: cd ~/workspace/fixtrees/building-ai-pocs-worker-56 && python3 - <<'EOF' import re for p,old,new in [("check-answerable/README.md","## 4. Claims","## Claims"),(" |
 | planar-nexus-2965-1794623737 | 2971 | `docs/TEST_VIDEO_FIXTURES.md` | MODIFIED | unknown | no edit/write call, no shell write command and no PR metadata explains it |
-| plan-coder-38-1794621184 | 40 | `docs/spikes/trajectory-coupling-phase0.md` | ADDED | created_outside_worker_edits | PR reports the file as added; no edit/write call and no shell write command in the transcript names it |
+| plan-coder-38-1794621184 | 40 | `docs/spikes/trajectory-coupling-phase0.md` | ADDED | unknown | PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed) |
 | matchline-1396-1794618447 | 1401 | `tests/test_bem_multiring.py` | MODIFIED | unknown | no edit/write call, no shell write command and no PR metadata explains it |
 | matchline-1398-1794613424 | 1400 | `.github/workflows/ci.yml` | MODIFIED | unknown | no edit/write call, no shell write command and no PR metadata explains it |
 | planar-nexus-2967-1794616245 | 2969 | `src/lib/__tests__/validation-service.test.ts` | MODIFIED | unknown | no edit/write call, no shell write command and no PR metadata explains it |
 | staging-studio-1547-1794613663 | 1549 | `src/lib/aesthetic-chips.ts` | DELETED | worker_shell_edit | exec step writes the file: cd ~/workspace/fixtrees/staging-studio-worker-1547 && sed -n '10,20p' src/app/api/setup/route.ts && git rm -q src/lib/cache.ts src/lib/rate-limit.ts src/lib/aes |
 | retrofit-copilot-11-1794613424 | 15 | `src/results.py` | MODIFIED | unknown | no edit/write call, no shell write command and no PR metadata explains it |
-| building-ai-pocs-53-1794612128 | 55 | `generative-ui-diagnostic-lens/real_runs/PROVENANCE.md` | ADDED | created_outside_worker_edits | PR reports the file as added; no edit/write call and no shell write command in the transcript names it |
+| building-ai-pocs-53-1794612128 | 55 | `generative-ui-diagnostic-lens/real_runs/PROVENANCE.md` | ADDED | unknown | PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed) |
 | planar-nexus-2966-1794611000 | 2968 | `src/lib/game-state/__tests__/oracle-text-parser-branches.test.ts` | MODIFIED | unknown | no edit/write call, no shell write command and no PR metadata explains it |
-| plan-coder-23-1794610079 | 36 | `docs/spikes/filesize-ratchet-phase0.md` | ADDED | created_outside_worker_edits | PR reports the file as added; no edit/write call and no shell write command in the transcript names it |
+| plan-coder-23-1794610079 | 36 | `docs/spikes/filesize-ratchet-phase0.md` | ADDED | unknown | PR reports the file as added, but no edit/write call, no shell write command and no supervisor note explains it; absence of a worker edit is not evidence of an outside edit (issue #29 section 4: labelled by evidence, not guessed) |
 
 ## Table 3 -- precision spot-check of attributed (file, step) pairs
 
@@ -224,11 +224,24 @@ the record does not support a cause.
 
 ## Verdict
 
-**Park** -- aggregate coverage 53.3% < 70%; causes explainable 13/20
+**Park** -- aggregate coverage 53.3% < 70%; causes explainable 2/20
 
 * aggregate coverage 53.3% (bar: >= 70%)
 * per-PR median coverage 100.0% (bar: >= 75%)
 * precision 20/20 (bar: 20/20)
-* unattributed causes explainable 13/20 (bar: >= 16/20)
+* unattributed causes explainable 2/20 (bar: >= 16/20)
 * reason-excerpt yield 82.0%
+
+**Correction (2026-11-14, JiTTest catch on PR #49, Alex disposition:
+fix):** the classifier originally asserted a cause from absence —
+files the transcript never named were labelled
+`created_outside_worker_edits` / `deleted_outside_worker_edits` and
+counted as explainable (13/20). Absence of a worker edit is not
+evidence of an outside edit (issue #29 section 4: "labelled by
+evidence, not guessed in bulk"), so those 11 subsample files are now
+labelled `unknown` and the explainable figure is **2/20**. The labels
+above were recomputed with the fixed classifier over the original
+transcripts; the verdict is unchanged (**Park** — it already failed
+the aggregate-coverage bar). The catching test is a permanent
+regression test: `tests/test_provenance_phase0_jittest.py`.
 
