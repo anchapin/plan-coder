@@ -29,6 +29,7 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import ClassVar
 
 REPO = Path(__file__).resolve().parent.parent
 BIN = REPO / "bin"
@@ -319,10 +320,10 @@ class GradingTests(unittest.TestCase):
 class _MockProvider(BaseHTTPRequestHandler):
     """One tool call, then a plain answer: enough for one full step."""
 
-    requests: list = []
+    requests: ClassVar[list] = []
     calls = 0
 
-    def do_POST(self):  # noqa: N802 - http.server API
+    def do_POST(self):
         length = int(self.headers.get("Content-Length") or 0)
         payload = json.loads(self.rfile.read(length) or b"{}")
         type(self).requests.append(payload)

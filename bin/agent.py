@@ -495,8 +495,8 @@ def summarize_stored_output(text: str, handle: str,
     kept_chars = len(body)
     dropped_lines = total_lines - kept_lines
     dropped_chars = total_chars - kept_chars
-    out = [f"[ctx] stored output: {total_lines} lines, {total_chars} chars "
-           f"(handle {handle})"]
+    out = [(f"[ctx] stored output: {total_lines} lines, {total_chars} chars "
+            f"(handle {handle})")]
     if body:
         out.append(body)
     if dropped_lines or dropped_chars:
