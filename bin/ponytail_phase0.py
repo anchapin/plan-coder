@@ -57,7 +57,6 @@ import subprocess
 import sys
 from collections import defaultdict
 
-
 GH_OWNER = "anchapin"
 GH_TIMEOUT = 30
 
@@ -658,7 +657,7 @@ def render_report(ledger_path, table, dists, cases, gh_state, gh_note, args):
             "(`git diff --numstat` at the recorded worker branch); the fetch method "
             "used for each row is in the `diff_source` column"
         )
-    lines.append(f"- p90 is nearest-rank; the median is the ordinary median; no means are reported")
+    lines.append("- p90 is nearest-rank; the median is the ordinary median; no means are reported")
     lines.append("")
     lines.append("## Raw table (verbatim script output)")
     lines.append("")
