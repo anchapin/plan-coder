@@ -22,12 +22,11 @@ Run: python3 -m pytest tests/test_astgrep_matchline.py -q
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import unittest
 from pathlib import Path
-
-import yaml
 
 REPO = Path(__file__).resolve().parent.parent
 SPIKE = REPO / "spikes" / "astgrep-matchline"
@@ -54,6 +53,34 @@ EXPECTED_PAIRS = {
 }
 
 
+_TOP_LEVEL_KEY = re.compile(r"^([A-Za-z_][\w-]*):(?:\s+(.*?))?\s*$")
+
+
+def parse_rule_fields(text: str) -> dict[str, str]:
+    """Top-level fields of an ast-grep rule file, stdlib only.
+
+    CI installs only pytest + ruff (see .github/workflows/ci.yml), so
+    this test must not depend on PyYAML.  The rule files are flat:
+    scalar top-level fields plus one nested ``rule:`` block, and the
+    checks below need only the top-level scalars (the block counts as
+    present with an empty value).  Full YAML validation happens when
+    ast-grep itself loads the rule in AstGrepScanTest.
+    """
+    fields: dict[str, str] = {}
+    for line in text.splitlines():
+        if not line or line[0] in " \t#-":
+            continue
+        match = _TOP_LEVEL_KEY.match(line)
+        if match:
+            value = match.group(2) or ""
+            if len(value) >= 2 and value[0] == value[-1] == '"':
+                value = value[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+            elif len(value) >= 2 and value[0] == value[-1] == "'":
+                value = value[1:-1]
+            fields[match.group(1)] = value
+    return fields
+
+
 def find_ast_grep() -> str | None:
     """Return a real ast-grep binary path, or None."""
     import os
@@ -69,7 +96,7 @@ def find_ast_grep() -> str | None:
     for candidate in candidates:
         try:
             proc = subprocess.run(
-                [candidate, "--version"], capture_output=True, text=True, timeout=30
+                [candidate, "--version"], capture_output=True, text=True, timeout=30, check=False
             )
         except (OSError, subprocess.SubprocessError):
             continue
@@ -87,8 +114,8 @@ class RuleFileTest(unittest.TestCase):
         self.assertLessEqual(len(rule_files), 5, "3-5 rules are required")
         seen = set()
         for path in rule_files:
-            spec = yaml.safe_load(path.read_text(encoding="utf-8"))
-            self.assertIsInstance(spec, dict, f"{path.name} is not a YAML mapping")
+            spec = parse_rule_fields(path.read_text(encoding="utf-8"))
+            self.assertTrue(spec, f"{path.name} has no top-level YAML fields")
             for field in ("id", "language", "severity", "message", "note", "rule"):
                 self.assertIn(field, spec, f"{path.name} misses '{field}'")
             self.assertEqual(spec["language"], "python")
@@ -115,11 +142,12 @@ class AstGrepScanTest(unittest.TestCase):
     def _scan(self, binary: str, target: Path) -> dict:
         counts: dict[str, int] = {}
         for rule_path in sorted(RULES_DIR.glob("*.yml")):
-            spec = yaml.safe_load(rule_path.read_text(encoding="utf-8"))
+            spec = parse_rule_fields(rule_path.read_text(encoding="utf-8"))
             proc = subprocess.run(
                 [binary, "scan", "--json", "--rule", str(rule_path), str(target)],
                 capture_output=True,
                 text=True,
+                check=False,
             )
             self.assertEqual(
                 proc.returncode, 0, f"ast-grep failed: {proc.stderr[:400]}"
