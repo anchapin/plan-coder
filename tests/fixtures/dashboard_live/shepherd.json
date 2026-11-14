@@ -1,0 +1,9 @@
+{
+  "tracked_prs": [
+    "https://github.com/you/repo-a/pull/101",
+    "https://github.com/you/repo-b/pull/102"
+  ],
+  "seen_merged": [],
+  "pending_trigger": null,
+  "last_trigger": null
+}

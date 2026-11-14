@@ -1,0 +1,33 @@
+{
+  "tracked_prs": {
+    "https://github.com/you/repo-a/pull/456": {
+      "repo": "repo-a",
+      "pr": 456,
+      "rerun_count": 1,
+      "ci_fix_attempts": 0,
+      "added_at": "2026-01-05T13:40:00Z"
+    },
+    "https://github.com/you/repo-c/pull/789": {
+      "repo": "repo-c",
+      "pr": 789,
+      "rerun_count": 2,
+      "ci_fix_attempts": 1,
+      "jittest:catch": true,
+      "added_at": "2026-01-04T09:00:00Z"
+    }
+  },
+  "seen_merged": [
+    "https://github.com/you/repo-b/pull/12"
+  ],
+  "pending_trigger": {
+    "reason": "PR(s) 456 merged",
+    "merges": [456],
+    "requested_at": "2026-01-05T18:00:00Z"
+  },
+  "last_trigger": {
+    "requested_at": "2026-01-04T18:00:00Z"
+  },
+  "jittest_catch_prs": [
+    "https://github.com/you/repo-c/pull/789"
+  ]
+}

@@ -1,0 +1,5 @@
+{"ts": "2026-01-05T18:05:00Z", "repo": "repo-a", "pr": 456, "pr_url": "https://github.com/you/repo-a/pull/456", "action": "rerun", "outcome": "flaky ci rerun", "ci": "one failure", "merge_state": "", "detail": ""}
+{"ts": "2026-01-05T18:10:00Z", "repo": "repo-a", "pr": 456, "pr_url": "https://github.com/you/repo-a/pull/456", "action": "merged", "outcome": "merged by operator", "ci": "green", "merge_state": "CLEAN", "detail": ""}
+{"ts": "2026-01-05T18:20:00Z", "repo": "repo-c", "pr": 789, "pr_url": "https://github.com/you/repo-c/pull/789", "action": "fix_attempt", "outcome": "formatting fix", "ci": "lint failed", "merge_state": "", "detail": ""}
+{"ts": "2026-01-05T18:25:00Z", "repo": "repo-c", "pr": 789, "pr_url": "https://github.com/you/repo-c/pull/789", "action": "merged_by_shepherd", "outcome": "merged by shepherd", "ci": "green", "merge_state": "UNSTABLE", "detail": "pre-existing failure"}
+{"ts": "2026-01-05T18:30:00Z", "repo": "repo-c", "pr": 321, "pr_url": "https://github.com/you/repo-c/pull/321", "action": "needs_operator", "outcome": "flagged for the operator", "ci": "unknown", "merge_state": "", "detail": "domain judgment needed"}

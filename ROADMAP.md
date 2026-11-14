@@ -30,15 +30,17 @@ current state; this document only asserts what is visible in the code.
 | 6 | **Desktop-runner parity** (the same harness driven by a desktop runner) | **Planned (not built)** — nothing in this repo addresses it | The runner surface here is the OpenAI-shaped API route (`bin/agent.py` speaks the chat-completions shape to the z.ai and MiniMax plan endpoints) plus the CLI *route* interface from #1. No desktop runner, its session model, or its parity layer exists in this tree | [#10](https://github.com/anchapin/plan-coder/issues/10), [#5](https://github.com/anchapin/plan-coder/issues/5) |
 | 7 | **Per-plan cost/token accounting** (spend attributed to a plan, not just a tier) | **Planned (not built)** — tokens are recorded per run, not per plan | `worker_ledger.jsonl` rows carry `tier`, `providers_used`, `tokens_in`, `tokens_out` (row schema in `prompts/backlog-supervisor.md` step 8; sample rows in `examples/worker_ledger.example.jsonl`), and `bin/trace_summary.py` aggregates by day / repo / tier / issue only. Plans exist in config (`plans[].id`) but **no plan id is written onto a ledger row**, so per-plan totals cannot be computed from the data this repo writes today | [#5](https://github.com/anchapin/plan-coder/issues/5), [#10](https://github.com/anchapin/plan-coder/issues/10) |
 | 8 | **Brief-quality feedback loop** (does the brief predict the run's outcome?) | **Partial** — the guard rails and the review spike exist; the closed loop does not | `bin/ledger_check.py` blocks an unchanged re-brief of an issue with 2+ `failed:*` rows and no `pr_opened` row; `bin/failover.py` feeds prior-attempt reflections and a tier change into the next brief; `bin/grade_run.py` writes the mechanical `grade` (0–100) onto the ledger row; `bin/goldfish.py` is a zero-context brief review whose rows land in `goldfish_ledger.jsonl` (`findings`, `blockers`, `dispositions`, `brief_changed`) — but it ships **disabled** (`workers.goldfish.enabled: false` in `config/deployment.example.json`). The weekly `harness-tune` pass is the consumer of all of this. **Not built:** a scored brief-quality signal that closes the loop from brief text to outcome | [#5](https://github.com/anchapin/plan-coder/issues/5) |
-| 9 | **The dashboard** (one view over the harness's own state) | **Planned (not built)** — design only, see below | README is explicit: "Tracing, grading, and burn guards are **mechanical, not a dashboard**." The existing surface is a set of read-only CLIs: `bin/trace_summary.py` (ledger aggregates), `bin/shepherd_ledger.py summary` (shepherd actions), `bin/ledger_check.py` (retry guard). No dashboard code exists in this repo | [#5](https://github.com/anchapin/plan-coder/issues/5) |
+| 9 | **The dashboard** (one view over the harness's own state) | **Partial** — the MVP is built: `bin/dashboard.py` serves the live view and PR-metrics panels over a state dir; the quality-trends panel is not built | `bin/dashboard.py` renders one self-contained HTML page (no CDN, no network, no credentials) from `workers.json`, `shepherd.json`, `worker_ledger.jsonl` and `shepherd_ledger.jsonl`: **Panel 1 (live view)** — workers in flight per repo, shepherd-tracked / merged / flagged PRs, ledger tail as an activity feed; **Panel 2 (PR metrics)** — PR-opened rate (the `bin/trace_summary.py` ratio), merges incl. UNSTABLE merges, fix attempts and flagged PRs per distinct PR (the `bin/shepherd_ledger.py summary` counts), failure classes, and token burn vs the configured cycle budget. Read-only: it never writes to the state dir, and a missing state file renders an empty panel with a "no rows yet" note. **Not built:** the Panel 3 quality-trends view (grade trends, JiT/Goldfish panels) — that stays with the weekly tune pass for now | [#5](https://github.com/anchapin/plan-coder/issues/5) |
 
 ---
 
-## Dashboard design (design only — nothing is built yet)
+## Dashboard design (design + MVP status)
 
-This section is the pre-build design for issue #5's third acceptance criterion. It is a
-**presentation layer over the state directory the harness already writes**. No dashboard
-program exists in this repository; everything below is a specification.
+This section is the design for issue #5's third acceptance criterion and the status of
+what was built from it. It is a
+**presentation layer over the state directory the harness already writes**. The MVP lives
+in `bin/dashboard.py` (Panel 1 and Panel 2 below); Panel 3 (quality trends) is specified
+here but **not built** — the page says so.
 
 ### Constraints
 
@@ -165,7 +167,7 @@ inventing its own windows.
 | PR metrics | `worker_ledger.jsonl`, `shepherd_ledger.jsonl` | 5 min | `bin/trace_summary.py`, `bin/shepherd_ledger.py summary` semantics |
 | Quality trends | `worker_ledger.jsonl`, `jittest_ledger.jsonl`, `goldfish_ledger.jsonl` | daily + after each weekly tune | `bin/trace_summary.py` semantics; tune-pass windows |
 
-Intended shape of the implementation, when it is built: one local, read-only command
+Intended shape of the implementation: one local, read-only command
 (e.g. `bin/dashboard.py`) that resolves the state dir through the existing config search
 order, reads the files above, and emits a **single self-contained HTML file** (no CDN, no
 network calls, no external assets) opened with `file://`. The three panels are three
@@ -173,6 +175,13 @@ sections of that one page, each carrying its own timestamp so a stale panel is v
 rather than silently old. The implementation must not write to the state dir, must not
 need credentials, and must not shell out to `gh` — CI state is shown from
 `shepherd_ledger.jsonl` (`ci`, `merge_state`), not fetched live.
+
+**What the MVP implements** (`bin/dashboard.py`): the command shape above
+(`--state-dir`, plus `--config`, `--since`, `--tail`, `--out`, `--json`), the live view
+and the PR metrics as two sections of the one HTML page, each with its own timestamp.
+The page is written to stdout by default (`--out FILE` writes it elsewhere; the dashboard
+refuses to write inside the state dir). Panel 3 (quality trends) is **not built**: the
+page renders a placeholder that points at the weekly tune pass.
 
 ### Open questions for the build
 

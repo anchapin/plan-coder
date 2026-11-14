@@ -15,7 +15,7 @@ Token plans (flat-rate coding plans from z.ai, MiniMax, and similar providers) r
 - **Verification is independent.** The manager re-reads the diff, re-runs the tests, and applies a stale-test protocol (stash, re-run on unmodified code, pop) before believing any "pre-existing failure" claim.
 - **The queue keeps itself flowing.** A PR shepherd polls CI every 30 minutes, reruns flakes once, auto-fixes clearly mechanical failures with bounded attempts, and merges well-scoped PRs once their PR-specific CI is green — under a written merge policy with hard stops (domain-judgment changes, workflow/branch-protection edits, anything unverifiable) reserved for the human.
 - **The harness tunes itself, with evidence.** Every run appends one line to a metrics ledger and a truncated JSONL transcript. A weekly tuning pass aggregates outcomes, samples the top failure classes' transcripts, and applies small edits to prompts and routing — each backed by at least two distinct worker runs. Structural changes are flagged for the human, never applied autonomously.
-- **Tracing, grading, and burn guards are mechanical, not a dashboard.** `bin/trace_summary.py` turns the ledger into per-day/per-repo/per-tier totals; `bin/grade_run.py` scores each run's trajectory 0–100 from its transcript (first-edit step, test evidence, gates) at collection time and the score lands on the ledger line as an additive `grade` field; `bin/ledger_check.py` blocks unchanged re-briefs of issues with 2+ failures and no PR. Two guards cap pathological burn — a per-run `--max-tokens-out` in `agent.py` and a per-cycle `cycle_tokens_out_budget` in the supervisor — both off by default (`0`). They cap **completion tokens only**: prompt tokens are dominated by cache reads and do not separate good runs from bad ones, so they are never capped. Set the numbers above the p99 of your own measured runs (on the reference deployment: tokens_out p99 ≈ 148k, max ≈ 193k per run, so a 200k per-run cap and a 750k per-cycle budget trip only on unprecedented burn).
+- **Tracing, grading, and burn guards are mechanical, not a dashboard.** `bin/trace_summary.py` turns the ledger into per-day/per-repo/per-tier totals; `bin/grade_run.py` scores each run's trajectory 0–100 from its transcript (first-edit step, test evidence, gates) at collection time and the score lands on the ledger line as an additive `grade` field; `bin/ledger_check.py` blocks unchanged re-briefs of issues with 2+ failures and no PR. The dashboard below is a *read-only view* over that state — it makes no decisions and writes nothing. Two guards cap pathological burn — a per-run `--max-tokens-out` in `agent.py` and a per-cycle `cycle_tokens_out_budget` in the supervisor — both off by default (`0`). They cap **completion tokens only**: prompt tokens are dominated by cache reads and do not separate good runs from bad ones, so they are never capped. Set the numbers above the p99 of your own measured runs (on the reference deployment: tokens_out p99 ≈ 148k, max ≈ 193k per run, so a 200k per-run cap and a 750k per-cycle budget trip only on unprecedented burn).
 
 ## Components
 
@@ -25,6 +25,7 @@ Token plans (flat-rate coding plans from z.ai, MiniMax, and similar providers) r
 | `bin/trace_summary.py` | Ledger aggregator: per-day / per-repo / per-tier totals from `worker_ledger.jsonl` — runs, PR-opened rate, tokens in/out, hit-cap rate, gate triggers, top-burn runs, repeat failures. JSON or one-line human summary |
 | `bin/grade_run.py` | Mechanical trajectory grader: scores one run 0–100 from its transcript (first-edit step, exploration ratio, test evidence, gates, completion) plus a claim-vs-diff check against the worktree when run live at collection time. No LLM judge |
 | `bin/ledger_check.py` | Per-issue retry guard: exits non-zero when an issue already has 2+ failed ledger rows and no PR opened — the supervisor calls it before briefing instead of eyeballing the ledger |
+| `bin/dashboard.py` | Read-only dashboard over the state dir: one self-contained HTML page with the live view (workers in flight per repo, shepherd PRs, ledger tail) and the PR metrics (PR-opened rate, merges, failure classes, burn vs the cycle budget). No network, no credentials, never writes to the state dir |
 | `bin/quick_check.py` | Tiny quota probe — sends a minimal completion to verify a plan's quota is live |
 | `bin/dry_run.py` | Offline dry run: runs the real worker loop against a fake provider on 127.0.0.1 — no credential, no network, no real repo. Produces the diff that a supervisor would wrap into a pull request, so a reviewer can validate the setup before spending quota |
 | `bin/render_prompts.py` | Renders the prompt templates with a deployment config into ready-to-install prompts |
@@ -322,6 +323,29 @@ Everything specific to one installation lives in a single config file, not in th
 3. **Isolation before parallelism.** One worktree per worker, never two git writers in one tree — branch switches destroy other writers' uncommitted work.
 4. **State is boring on purpose.** One JSON state file, one append-only JSONL ledger, one transcript per run. When a state file corrupts, the ledger is the recovery source.
 5. **Self-improvement is gated like everything else.** The tuning pass needs two runs of evidence per change and a human gate for anything structural. The system may tune its prompts; it may not rewrite its own authority.
+
+## Dashboard — a read-only view over the state dir
+
+`bin/dashboard.py` renders one self-contained HTML page (no CDN, no network, no
+credentials) from the state dir the harness already writes:
+
+```bash
+# live view + PR metrics, straight to stdout (or --out page.html)
+python3 bin/dashboard.py --state-dir ~/.plan-coder/state
+```
+
+* **Live view** — workers in flight per repo (`workers.json`), the PRs the shepherd
+  tracks / has merged / has flagged (`shepherd.json`), and the tail of
+  `worker_ledger.jsonl` as an activity feed.
+* **PR metrics** — PR-opened rate, merges (including UNSTABLE merges), fix attempts and
+  flagged PRs per distinct PR, failure classes, and token burn vs the configured cycle
+  budget. The numbers come from `bin/trace_summary.py` and
+  `bin/shepherd_ledger.py summary`, so the page and the CLIs agree.
+
+It is read-only: it never writes to the state dir, needs no API key, and never calls
+`gh` (CI state comes from `shepherd_ledger.jsonl`). A missing state file renders an empty
+panel with a "no rows yet" note. The design and its status are in
+[ROADMAP.md](ROADMAP.md) §"Dashboard design".
 
 ## What is *not* in this repo
 
