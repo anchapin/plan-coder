@@ -61,7 +61,7 @@ import re
 import statistics
 import subprocess
 import sys
-from collections import Counter, defaultdict
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -318,11 +318,9 @@ def normalise_path(raw: str, workdir: str | None = None,
     if not path:
         return ""
     path = path.replace("\\", "/")
-    if path.startswith("~/"):
-        path = path[2:]
+    path = path.removeprefix("~/")
     root = (workdir or "").rstrip("/")
-    if root.startswith("~/"):
-        root = root[2:]
+    root = root.removeprefix("~/")
     if root:
         if path.startswith(root + "/"):
             path = path[len(root) + 1:]
@@ -408,7 +406,8 @@ def gh_pr_files(repo: str, pr: str, cache_dir: str | None = None) -> dict:
     _ensure_proxy_env()
     cmd = ["gh", "pr", "view", str(pr), "--repo", repo, "--json", "files"]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120,
+                              check=False)
     except (OSError, subprocess.TimeoutExpired) as exc:
         result = {"files": [], "error": f"{type(exc).__name__}: {exc}"}
     else:
@@ -604,16 +603,16 @@ def classify_unattributed(entry: dict, steps: list[Step],
                     "file added and the ledger note records a supervisor edit: "
                     + note[:140])
         return ("created_outside_worker_edits",
-                "PR reports the file as added; no edit/write call and no "
-                "shell write command in the transcript names it")
+                ("PR reports the file as added; no edit/write call and no "
+                 "shell write command in the transcript names it"))
     if change_type == "REMOVED":
         if supervisor_says:
             return ("supervisor_post_run_edit",
                     "file removed and the ledger note records a supervisor "
                     "edit: " + note[:140])
         return ("deleted_outside_worker_edits",
-                "PR reports the file as deleted; no edit/write call and no "
-                "shell write command names it")
+                ("PR reports the file as deleted; no edit/write call and no "
+                 "shell write command names it"))
     if change_type == "RENAMED":
         return ("renamed_file", "PR reports the file as renamed")
     if supervisor_says:
@@ -621,8 +620,8 @@ def classify_unattributed(entry: dict, steps: list[Step],
                 "the ledger note records a supervisor edit for this run: "
                 + note[:140])
     return ("unknown",
-            "no edit/write call, no shell write command and no PR metadata "
-            "explains it")
+            ("no edit/write call, no shell write command and no PR metadata "
+             "explains it"))
 
 
 # Hand-checked overrides for the sampled unattributed files.  Each entry
@@ -681,11 +680,11 @@ def verdict(aggregate: float | None, median: float | None,
     if not fails:
         return ("PASS", "all four bars met")
     if aggregate < KILL_AGGREGATE_PCT:
-        return ("Kill", f"aggregate coverage {aggregate:.1f}% < "
-                       f"{KILL_AGGREGATE_PCT:.0f}%")
+        return ("Kill", (f"aggregate coverage {aggregate:.1f}% < "
+                         f"{KILL_AGGREGATE_PCT:.0f}%"))
     if precision_hits < precision_total:
-        return ("Kill", f"precision {precision_hits}/{precision_total} and "
-                       f"aggregate {aggregate:.1f}%")
+        return ("Kill", (f"precision {precision_hits}/{precision_total} and "
+                         f"aggregate {aggregate:.1f}%"))
     return ("Park", "; ".join(fails))
 
 
