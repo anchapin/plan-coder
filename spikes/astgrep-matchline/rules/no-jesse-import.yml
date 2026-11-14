@@ -1,0 +1,21 @@
+# R2 — `jesse.py` is research-only (WiSARD reproduction); it must not be wired
+# into the production pipeline.
+#
+# Source of truth (matchline, as quoted in plan-coder issue #18):
+#   AGENTS.md (Project Structure / Untrusted-input): "jesse.py is research-only
+#   (WiSARD reproduction) and must not be wired into the production pipeline."
+#   CONTRACT.md: the production pipeline must not import the research module.
+#
+# Rule scope: any import of the `jesse` module — plain `import jesse`,
+# `import jesse as ...` is intentionally NOT covered here (it still names the
+# research module and is handled by the same convention), plus every
+# `from jesse import ...` form.
+id: no-jesse-import
+language: python
+severity: error
+message: "importing `jesse` is forbidden — matchline AGENTS.md: \"jesse.py is research-only (WiSARD reproduction) and must not be wired into the production pipeline\""
+note: "jesse.py is a research reproduction; the production pipeline must not depend on it."
+rule:
+  any:
+    - pattern: import jesse
+    - pattern: from jesse import $$$

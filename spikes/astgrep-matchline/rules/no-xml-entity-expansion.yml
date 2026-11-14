@@ -1,0 +1,25 @@
+# R3 — Parse XML with entity expansion disabled.
+#
+# Source of truth (matchline, as quoted in plan-coder issue #18):
+#   AGENTS.md (Untrusted-input): "Parse XML with entity expansion disabled."
+#   CONTRACT.md:               "parse XML with entity expansion disabled"
+#   (recorded for issue #42 as AGENTS.md:22 / CONTRACT.md:31)
+#
+# Rule scope: every call that constructs an XML parser with entity expansion
+# switched ON — i.e. `XMLParser(resolve_entities=True)` in its
+# `etree.XMLParser(...)` / `ET.XMLParser(...)` / `lxml.etree.XMLParser(...)`
+# shapes.  The safe form is `resolve_entities=False` (or the matchline
+# `safe_xml.safe_xml_parser()` helper), which this rule does not match.
+#
+# ast-grep note: `kind: call` anchors the node; the two `regex` elements are
+# conjunctive constraints on the same call node's source text.
+id: no-xml-entity-expansion
+language: python
+severity: error
+message: "XML parser built with entity expansion enabled — matchline AGENTS.md (Untrusted-input): \"Parse XML with entity expansion disabled.\"; CONTRACT.md: \"parse XML with entity expansion disabled\""
+note: "Use resolve_entities=False, or the matchline safe_xml.safe_xml_parser() helper, for untrusted XML."
+rule:
+  all:
+    - kind: call
+    - regex: '(?i)parser'
+    - regex: 'resolve_entities\s*=\s*True'
