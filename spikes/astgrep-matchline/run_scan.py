@@ -72,7 +72,7 @@ def discover_ast_grep() -> tuple[str | None, str]:
     for path, origin in candidates:
         try:
             proc = subprocess.run(
-                [path, "--version"], capture_output=True, text=True, timeout=30
+                [path, "--version"], capture_output=True, text=True, timeout=30, check=False
             )
         except (OSError, subprocess.SubprocessError) as exc:  # pragma: no cover
             return None, f"candidate {path} ({origin}) could not be executed: {exc}"
@@ -239,7 +239,7 @@ class ReferenceScanner:
     def _text(source: str, node: ast.AST) -> str:
         try:
             segment = ast.get_source_segment(source, node)
-        except Exception:  # pragma: no cover - defensive
+        except Exception:  # noqa: BLE001  # pragma: no cover - defensive
             segment = None
         if segment is None:
             segment = ast.unparse(node)
@@ -311,6 +311,7 @@ def scan_with_ast_grep(binary: str, rules: list[tuple[Path, dict]], target: Path
             [binary, "scan", "--json", "--rule", str(rule_path), str(target)],
             capture_output=True,
             text=True,
+            check=False,
         )
         if proc.returncode != 0:
             raise RuntimeError(
@@ -417,7 +418,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.engine != "reference" and binary is not None:
         engine = "ast-grep"
         proc = subprocess.run(
-            [binary, "--version"], capture_output=True, text=True
+            [binary, "--version"], capture_output=True, text=True, check=False
         )
         version = (proc.stdout or proc.stderr or "").strip().splitlines()[0]
 

@@ -3,5 +3,5 @@
 Expected: `no-jesse-import` fires on both import forms below.
 """
 
-import jesse
-from jesse import research_helper
+import jesse  # noqa: F401
+from jesse import research_helper  # noqa: F401

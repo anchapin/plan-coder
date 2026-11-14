@@ -8,5 +8,5 @@ import subprocess
 
 def run_untrusted(command: str) -> str:
     """Run a command through a shell."""
-    completed = subprocess.run(command, shell=True, capture_output=True, text=True)
+    completed = subprocess.run(command, shell=True, capture_output=True, text=True, check=False)
     return completed.stdout
