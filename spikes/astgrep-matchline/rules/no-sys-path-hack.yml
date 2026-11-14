@@ -1,0 +1,22 @@
+# R1 — No `sys.path` hacks.
+#
+# Source of truth (matchline, as quoted in plan-coder issue #18):
+#   AGENTS.md (Never-list): "No `sys.path` hacks."
+#   CONTRACT.md:             "no `sys.path` hacks"
+#   docs/CODE-REVIEW.md:     anti-pattern "sys.path manipulation"
+#   (the same citations are recorded in docs/spikes/ast-grep-matchline-phase0.md
+#    for the issue #42 rules C1 — AGENTS.md:19, CONTRACT.md:30, CODE-REVIEW.md:45)
+#
+# Rule scope: every mutation of sys.path in Python source — insert / append /
+# extend.  Path scoping is NOT applied by this rule; scoping decisions belong
+# to the (Phase 1) CI wiring, not to the detection rule.
+id: no-sys-path-hack
+language: python
+severity: error
+message: "sys.path hack forbidden — matchline AGENTS.md (Never-list): \"No `sys.path` hacks.\"; CONTRACT.md: \"no `sys.path` hacks\""
+note: "Install the package (editable install / pyproject) instead of mutating sys.path."
+rule:
+  any:
+    - pattern: sys.path.insert($$$ARGS)
+    - pattern: sys.path.append($$$ARGS)
+    - pattern: sys.path.extend($$$ARGS)

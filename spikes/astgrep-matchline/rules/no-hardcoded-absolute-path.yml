@@ -1,0 +1,20 @@
+# R4 — No hardcoded machine / absolute paths in code.
+#
+# Source of truth (matchline, as quoted in plan-coder issue #18):
+#   AGENTS.md (Never-list): "No datasets, credentials, or machine paths in code."
+#   CONTRACT.md:             "never hardcode absolute venv paths"
+#   docs/CODE-REVIEW.md:     anti-pattern "~/workspace/... paths in library code"
+#   (recorded for issue #42 as AGENTS.md:19 / CONTRACT.md:30 / CODE-REVIEW.md:47)
+#
+# Rule scope: every string literal in Python source whose text contains a
+# machine-specific absolute path prefix: /home/..., ~/workspace/..., /Users/...
+# Docstring mentions are string nodes as well and are classified per hit in the
+# report; Phase 1 CI wiring may want to scope them out.
+id: no-hardcoded-absolute-path
+language: python
+severity: error
+message: "hardcoded machine/absolute path in code — matchline AGENTS.md (Never-list): \"No datasets, credentials, or machine paths in code.\"; CONTRACT.md: \"never hardcode absolute venv paths\""
+note: "Use environment variables or repo-relative paths instead of /home/..., ~/workspace/... or /Users/... literals."
+rule:
+  kind: string
+  regex: '(/home/|~/workspace|/Users/)'

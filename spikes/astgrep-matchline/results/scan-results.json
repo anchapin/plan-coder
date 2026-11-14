@@ -1,0 +1,93 @@
+{
+  "ast_grep_version": null,
+  "engine": "reference-fallback",
+  "engine_detail": "candidate /usr/bin/sg (`sg` on PATH) is not ast-grep: `/usr/bin/sg --version` printed 'Usage: sg group [[-c] command]'",
+  "fixture_sets": {
+    "clean": {
+      "by_rule": {
+        "no-hardcoded-absolute-path": 0,
+        "no-jesse-import": 0,
+        "no-subprocess-shell-true": 0,
+        "no-sys-path-hack": 0,
+        "no-xml-entity-expansion": 0
+      },
+      "matches": [],
+      "total_matches": 0
+    },
+    "violation": {
+      "by_rule": {
+        "no-hardcoded-absolute-path": 1,
+        "no-jesse-import": 2,
+        "no-subprocess-shell-true": 1,
+        "no-sys-path-hack": 3,
+        "no-xml-entity-expansion": 1
+      },
+      "matches": [
+        {
+          "column": 15,
+          "file": "/home/hatch/workspace/fixtrees/plan-coder-worker-18/spikes/astgrep-matchline/fixtures/violation/v4_hardcoded_absolute_path.py",
+          "line": 6,
+          "rule": "no-hardcoded-absolute-path",
+          "text": "\"/home/alice/datasets/matchline\""
+        },
+        {
+          "column": 0,
+          "file": "/home/hatch/workspace/fixtrees/plan-coder-worker-18/spikes/astgrep-matchline/fixtures/violation/v2_jesse_import.py",
+          "line": 6,
+          "rule": "no-jesse-import",
+          "text": "import jesse"
+        },
+        {
+          "column": 0,
+          "file": "/home/hatch/workspace/fixtrees/plan-coder-worker-18/spikes/astgrep-matchline/fixtures/violation/v2_jesse_import.py",
+          "line": 7,
+          "rule": "no-jesse-import",
+          "text": "from jesse import research_helper"
+        },
+        {
+          "column": 16,
+          "file": "/home/hatch/workspace/fixtrees/plan-coder-worker-18/spikes/astgrep-matchline/fixtures/violation/v5_subprocess_shell_true.py",
+          "line": 11,
+          "rule": "no-subprocess-shell-true",
+          "text": "subprocess.run(command, shell=True, capture_output=True, text=True)"
+        },
+        {
+          "column": 0,
+          "file": "/home/hatch/workspace/fixtrees/plan-coder-worker-18/spikes/astgrep-matchline/fixtures/violation/v1_sys_path_hack.py",
+          "line": 8,
+          "rule": "no-sys-path-hack",
+          "text": "sys.path.insert(0, \"/opt/vendor-libs\")"
+        },
+        {
+          "column": 0,
+          "file": "/home/hatch/workspace/fixtrees/plan-coder-worker-18/spikes/astgrep-matchline/fixtures/violation/v1_sys_path_hack.py",
+          "line": 9,
+          "rule": "no-sys-path-hack",
+          "text": "sys.path.append(\"/opt/other-libs\")"
+        },
+        {
+          "column": 0,
+          "file": "/home/hatch/workspace/fixtrees/plan-coder-worker-18/spikes/astgrep-matchline/fixtures/violation/v1_sys_path_hack.py",
+          "line": 10,
+          "rule": "no-sys-path-hack",
+          "text": "sys.path.extend([\"/opt/third-libs\"])"
+        },
+        {
+          "column": 9,
+          "file": "/home/hatch/workspace/fixtrees/plan-coder-worker-18/spikes/astgrep-matchline/fixtures/violation/v3_xml_entity_expansion.py",
+          "line": 8,
+          "rule": "no-xml-entity-expansion",
+          "text": "etree.XMLParser(resolve_entities=True, huge_tree=True)"
+        }
+      ],
+      "total_matches": 8
+    }
+  },
+  "rules": [
+    "no-hardcoded-absolute-path",
+    "no-jesse-import",
+    "no-subprocess-shell-true",
+    "no-sys-path-hack",
+    "no-xml-entity-expansion"
+  ]
+}

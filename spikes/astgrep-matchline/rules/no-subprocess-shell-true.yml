@@ -1,0 +1,22 @@
+# R5 — Generic guard: no `subprocess` call with `shell=True`.
+#
+# THIS IS NOT A MATCHLINE-DOCUMENTED CONVENTION.  It is a generic
+# unsafe-input guard, included in this spike only to measure whether the
+# rule machinery stays quiet on clean code (it must produce zero findings on
+# the clean fixture set).  It is reported separately in REPORT.md and must
+# not be presented as a matchline convention.
+#
+# Shape covered: `subprocess.run(cmd, shell=True)` and friends, i.e. a call
+# whose text names `subprocess` and whose keyword argument sets `shell=True`.
+# The `from subprocess import run` form is NOT covered by the `subprocess`
+# text constraint (documented limitation, see REPORT.md).
+id: no-subprocess-shell-true
+language: python
+severity: warning
+message: "subprocess call with shell=True — generic unsafe-input guard (NOT a matchline-documented convention)"
+note: "Pass an argument list and shell=False; shell=True with untrusted input is a command-injection surface."
+rule:
+  all:
+    - kind: call
+    - regex: 'subprocess'
+    - regex: 'shell\s*=\s*True'
