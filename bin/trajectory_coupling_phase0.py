@@ -53,7 +53,7 @@ import statistics
 import subprocess
 import sys
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from itertools import combinations
 
 DEFAULT_LEDGER_DIR = os.path.expanduser(
@@ -117,8 +117,8 @@ def parse_ts(value):
     except ValueError:
         return None
     if stamp.tzinfo is None:
-        stamp = stamp.replace(tzinfo=timezone.utc)
-    return stamp.astimezone(timezone.utc)
+        stamp = stamp.replace(tzinfo=UTC)
+    return stamp.astimezone(UTC)
 
 
 def normalize_repo(value):
@@ -155,9 +155,9 @@ def outcome_class(outcome):
     if value in ("stale", "escalated", "aborted", "diagnosis",
                  "split_suggested", "done"):
         return value
-    if value.startswith("pr_blocked") or value.startswith("ready_push_blocked"):
+    if value.startswith(("pr_blocked", "ready_push_blocked")):
         return "blocked"
-    if value.startswith("push_queued") or value.startswith("fix_prepared"):
+    if value.startswith(("push_queued", "fix_prepared")):
         return "push_queued"
     if value.startswith("failed"):
         return "failed"
@@ -824,7 +824,7 @@ def cycle_feasibility(cohorts, gap_minutes, window_hours):
                     if stamp is None:
                         continue
                     drift = (stamp - datetime.fromtimestamp(
-                        dispatch_epoch_of(row), tz=timezone.utc)).total_seconds()
+                        dispatch_epoch_of(row), tz=UTC)).total_seconds()
                     if drift <= window_hours * 3600:
                         fresh.append(row)
                 members = fresh
@@ -860,7 +860,7 @@ def cycle_feasibility(cohorts, gap_minutes, window_hours):
         stamp = parse_ts(row.get("ts"))
         if stamp is None:
             continue
-        dispatch = datetime.fromtimestamp(epoch, tz=timezone.utc)
+        dispatch = datetime.fromtimestamp(epoch, tz=UTC)
         drifts.append((stamp - dispatch).total_seconds() / 3600.0)
 
     return {
