@@ -16,7 +16,7 @@ import os
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -36,8 +36,7 @@ def write_transcript(path, run_id, steps, events=("started", "finished")):
         if "started" in events:
             handle.write(json.dumps({
                 "event": "started", "run_id": run_id, "tier": "cheap"}) + "\n")
-        for step in steps:
-            handle.write(json.dumps(step) + "\n")
+        handle.writelines(json.dumps(step) + "\n" for step in steps)
         if "finished" in events:
             handle.write(json.dumps({
                 "event": "finished", "steps": len(steps),
@@ -196,12 +195,12 @@ class WindowTests(unittest.TestCase):
         path = os.path.join(self.tmp.name, name)
         write_transcript(path, "fluxion-1-1700000000", [
             make_step(1, 1000, 10, ["exec"], ["a" * 40], ["ok"])])
-        stamp = datetime.fromtimestamp(mtime, timezone.utc).timestamp()
+        stamp = datetime.fromtimestamp(mtime, UTC).timestamp()
         os.utime(path, (stamp, stamp))
         return headroom.load_run(path)
 
     def test_only_recent_files_are_selected(self):
-        now = datetime(2026, 11, 14, tzinfo=timezone.utc)
+        now = datetime(2026, 11, 14, tzinfo=UTC)
         old = self._run("fluxion-1-1700000000.jsonl", (now - timedelta(days=30)).timestamp())
         new = self._run("fluxion-2-1700000001.jsonl", (now - timedelta(days=2)).timestamp())
         selected, start, end = headroom.select_window(
@@ -211,7 +210,7 @@ class WindowTests(unittest.TestCase):
         self.assertEqual(start, now - timedelta(days=14))
 
     def test_window_end_defaults_to_newest_mtime(self):
-        now = datetime(2026, 11, 14, tzinfo=timezone.utc)
+        now = datetime(2026, 11, 14, tzinfo=UTC)
         old = self._run("fluxion-1-1700000000.jsonl", (now - timedelta(days=30)).timestamp())
         new = self._run("fluxion-2-1700000001.jsonl", (now - timedelta(days=2)).timestamp())
         selected, _start, end = headroom.select_window([old, new], 14)
@@ -239,7 +238,7 @@ def row(repo="fluxion", share=5.0, tool_tokens=1000.0, e2e=10000,
 
 def build(rows, days=14):
     """Run build_report over synthetic rows."""
-    now = datetime(2026, 11, 14, tzinfo=timezone.utc)
+    now = datetime(2026, 11, 14, tzinfo=UTC)
     return headroom.build_report(
         rows=rows, window_start=now - timedelta(days=days), window_end=now,
         corpus_files=len(rows), corpus_steps=sum(r["steps"] for r in rows),

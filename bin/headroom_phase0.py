@@ -60,7 +60,7 @@ import statistics
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_TRANSCRIPTS = os.path.expanduser(
@@ -206,7 +206,7 @@ def tool_kind(name):
 def load_run(path):
     """Parse one transcript jsonl into a Run (read-only)."""
     run = Run(path=path, file=os.path.basename(path),
-              mtime=datetime.fromtimestamp(os.path.getmtime(path), timezone.utc))
+              mtime=datetime.fromtimestamp(os.path.getmtime(path), UTC))
     with open(path, encoding="utf-8", errors="replace") as handle:
         for line in handle:
             line = line.strip()
@@ -404,7 +404,7 @@ def select_window(runs, days, as_of=None):
     """
     newest = max((run.mtime for run in runs), default=None)
     if as_of is None:
-        end = newest if newest is not None else datetime.now(timezone.utc)
+        end = newest if newest is not None else datetime.now(UTC)
     else:
         end = as_of
     start = end - timedelta(days=days)
@@ -936,7 +936,7 @@ def main(argv=None):
     if args.as_of:
         as_of = datetime.fromisoformat(args.as_of)
         if as_of.tzinfo is None:
-            as_of = as_of.replace(tzinfo=timezone.utc)
+            as_of = as_of.replace(tzinfo=UTC)
 
     selected, window_start, window_end = select_window(corpus, args.days, as_of)
     rows = [measure_run(run) for run in selected]
