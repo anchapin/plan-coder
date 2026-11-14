@@ -645,40 +645,60 @@ def render_report(
         "it), the rule is re-run, and the scratch copy is deleted."
     )
     out.append("")
-    out.append(
-        "| rule | seeded file | baseline hits | hits after seed | "
-        "seeded hits | caught |"
-    )
-    out.append("|---|---|---|---|---|---|")
-    for rule in RULE_FILES:
-        data = seed[rule]
+    if not seed:
         out.append(
-            f"| {rule} | `{data['seeded_file']}` | {data['baseline_hits']} | "
-            f"{data['hits_after_seed']} | {data['seeded_hits']} "
-            f"({', '.join(data['seeded_locations'])}) | "
-            f"{'yes' if data['caught'] else 'NO'} |"
+            "Skipped — `--no-seed-check` was passed, so no seeded "
+            "violations were injected and no rule was re-run against a "
+            "seeded tree."
         )
-    out.append("")
+        out.append("")
+    else:
+        out.append(
+            "| rule | seeded file | baseline hits | hits after seed | "
+            "seeded hits | caught |"
+        )
+        out.append("|---|---|---|---|---|---|")
+        for rule in RULE_FILES:
+            data = seed[rule]
+            out.append(
+                f"| {rule} | `{data['seeded_file']}` | {data['baseline_hits']} | "
+                f"{data['hits_after_seed']} | {data['seeded_hits']} "
+                f"({', '.join(data['seeded_locations'])}) | "
+                f"{'yes' if data['caught'] else 'NO'} |"
+            )
+        out.append("")
     out.append("## 6. Phase 0 gate")
     out.append("")
     clean = [
         rule
         for rule in RULE_FILES
-        if summary[rule]["false_positive"] == 0 and seed[rule]["caught"]
+        if summary[rule]["false_positive"] == 0
+        and seed.get(rule, {}).get("caught", False)
     ]
-    verdict = "Proceed" if len(clean) >= 3 else "Kill"
-    out.append(
-        f"**Verdict: {verdict}** — {len(clean)} rules survive the gate "
-        f"({', '.join(clean)}): zero false positives after legitimate-exception "
-        "scoping and each catches its seeded violation.  The gate needs >= 3."
-    )
+    if not seed:
+        out.append(
+            "**Verdict: not evaluated** — the seeded-violation check was "
+            "skipped (`--no-seed-check`), so the gate's seeded-catch leg "
+            "has no evidence in this scan-only run."
+        )
+    else:
+        verdict = "Proceed" if len(clean) >= 3 else "Kill"
+        out.append(
+            f"**Verdict: {verdict}** — {len(clean)} rules survive the gate "
+            f"({', '.join(clean)}): zero false positives after legitimate-exception "
+            "scoping and each catches its seeded violation.  The gate needs >= 3."
+        )
     out.append("")
     out.append("| rule | false positives after scoping | seeded violation caught |")
     out.append("|---|---|---|")
     for rule in RULE_FILES:
+        caught = (
+            "not checked"
+            if rule not in seed
+            else ("yes" if seed[rule]["caught"] else "no")
+        )
         out.append(
-            f"| {rule} | {summary[rule]['false_positive']} | "
-            f"{'yes' if seed[rule]['caught'] else 'no'} |"
+            f"| {rule} | {summary[rule]['false_positive']} | {caught} |"
         )
     out.append("")
     out.append("## 7. C5 — candidate rule, dropped on evidence")
