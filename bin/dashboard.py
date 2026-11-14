@@ -63,8 +63,8 @@ import time
 from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from shepherd_ledger import summarize as shepherd_ledger_summary  # noqa: E402
-from trace_summary import summarize as trace_summary  # noqa: E402
+from shepherd_ledger import summarize as shepherd_ledger_summary
+from trace_summary import summarize as trace_summary
 
 # Worker statuses that mean "in flight" (the run is still burning).
 IN_FLIGHT_STATUSES = ("working", "collecting")
