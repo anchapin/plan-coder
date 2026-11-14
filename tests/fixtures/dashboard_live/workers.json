@@ -1,0 +1,38 @@
+{
+  "repo-a-999": {
+    "branch": "worker/999-in-flight",
+    "issue": 999,
+    "note": "",
+    "pr": null,
+    "provider_used": "minimax/MiniMax-M2.7 (balanced)",
+    "repo": "repo-a",
+    "started_at": "2026-01-06T09:00:00Z",
+    "status": "working",
+    "tokens": 120000,
+    "workdir": "/tmp/worktrees/repo-a-worker-999"
+  },
+  "repo-b-888": {
+    "branch": "worker/888-in-flight",
+    "issue": 888,
+    "note": "",
+    "pr": null,
+    "provider_used": "minimax/MiniMax-M2.5-highspeed (cheap)",
+    "repo": "repo-b",
+    "started_at": "2026-01-06T09:05:00Z",
+    "status": "collecting",
+    "tokens": 45000,
+    "workdir": "/tmp/worktrees/repo-b-worker-888"
+  },
+  "repo-c-777": {
+    "branch": "worker/777-done",
+    "issue": 777,
+    "note": "PR opened",
+    "pr": "https://github.com/you/repo-c/pull/777",
+    "provider_used": "minimax/MiniMax-M2.7 (balanced)",
+    "repo": "repo-c",
+    "started_at": "2026-01-06T08:00:00Z",
+    "status": "done",
+    "tokens": 300000,
+    "workdir": null
+  }
+}

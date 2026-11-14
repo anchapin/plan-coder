@@ -11,6 +11,10 @@ __pycache__/
 worker_ledger.jsonl
 workers.json
 shepherd.json
+# Synthetic dashboard test fixtures are not live state (tests/test_dashboard.py).
+!tests/fixtures/**/worker_ledger.jsonl
+!tests/fixtures/**/workers.json
+!tests/fixtures/**/shepherd.json
 transcripts/
 WORKER_REPORT.md
 
