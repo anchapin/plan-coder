@@ -266,48 +266,47 @@ def load_run(path):
     """Parse one transcript jsonl into a Run (read-only)."""
     run = Run(path=os.path.basename(path))
     try:
-        handle = open(path, encoding="utf-8", errors="replace")
+        with open(path, encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(obj, dict):
+                    continue
+                event = obj.get("event")
+                if event == "started":
+                    run.run_id = obj.get("run_id") or run.run_id
+                    continue
+                if event == "finished":
+                    run.total_in = _as_int(obj.get("total_in"))
+                    run.total_out = _as_int(obj.get("total_out"))
+                    run.reported_steps = _as_int(obj.get("steps")) or None
+                    continue
+                if "step" not in obj:
+                    continue
+                step = Step(index=_as_int(obj.get("step")))
+                step.tokens_in = _as_int(obj.get("tokens_in"))
+                step.tokens_out = _as_int(obj.get("tokens_out"))
+                calls = obj.get("tool_calls") or []
+                results = obj.get("tool_results") or []
+                for index, call in enumerate(calls):
+                    if not isinstance(call, dict):
+                        continue
+                    name = call.get("name") or ""
+                    args = _parse_args(call.get("args"))
+                    raw_result = ""
+                    if index < len(results):
+                        candidate = results[index]
+                        raw_result = candidate if isinstance(candidate, str) \
+                            else json.dumps(candidate)
+                    step.calls.append(Call(name=name, args=args, result=raw_result))
+                run.steps.append(step)
     except OSError:
         return run
-    with handle:
-        for line in handle:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                obj = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(obj, dict):
-                continue
-            event = obj.get("event")
-            if event == "started":
-                run.run_id = obj.get("run_id") or run.run_id
-                continue
-            if event == "finished":
-                run.total_in = _as_int(obj.get("total_in"))
-                run.total_out = _as_int(obj.get("total_out"))
-                run.reported_steps = _as_int(obj.get("steps")) or None
-                continue
-            if "step" not in obj:
-                continue
-            step = Step(index=_as_int(obj.get("step")))
-            step.tokens_in = _as_int(obj.get("tokens_in"))
-            step.tokens_out = _as_int(obj.get("tokens_out"))
-            calls = obj.get("tool_calls") or []
-            results = obj.get("tool_results") or []
-            for index, call in enumerate(calls):
-                if not isinstance(call, dict):
-                    continue
-                name = call.get("name") or ""
-                args = _parse_args(call.get("args"))
-                raw_result = ""
-                if index < len(results):
-                    candidate = results[index]
-                    raw_result = candidate if isinstance(candidate, str) \
-                        else json.dumps(candidate)
-                step.calls.append(Call(name=name, args=args, result=raw_result))
-            run.steps.append(step)
     if run.run_id is None:
         run.run_id = os.path.basename(path)[:-6] if path.endswith(".jsonl") \
             else os.path.basename(path)
