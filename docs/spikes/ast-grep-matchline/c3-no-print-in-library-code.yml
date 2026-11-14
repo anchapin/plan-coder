@@ -1,0 +1,16 @@
+# C3 — No print() in library code.
+#
+# Source of truth (matchline develop @ 522e18a):
+#   docs/CODE-REVIEW.md:44  Anti-pattern: "print() in library code
+#                           (should be in CLI/main only)"
+#
+# Rule scope: every print(...) call in every *.py file of the tree.  The
+# library-vs-script decision is a per-hit classification (CLI/main scripts may
+# legitimately print), not a rule-scope exclusion.
+id: c3-no-print-in-library-code
+language: python
+severity: warning
+message: "print() in library code — CLI/main scripts may print, library modules must not"
+note: "Use logging/return values instead of print() in library modules."
+rule:
+  pattern: print($$$ARGS)

@@ -1,0 +1,23 @@
+# C2 — Untrusted XML must be parsed only through safe_xml.
+#
+# Source of truth (matchline develop @ 522e18a):
+#   safe_xml.py:1-7        "All untrusted XML input ... MUST use safe_xml_parser()
+#                          or safe_xml_parse()"
+#   CONTRACT.md:31         "parse XML with entity expansion disabled"
+#   AGENTS.md:22           "Parse XML with entity expansion disabled."
+#
+# Rule scope: EVERY etree.parse(...) / ET.parse(...) call site in the tree,
+# any arity.  Whether the call is a true violation depends on the per-hit
+# classification (untrusted input parsed without a safe parser = violation;
+# a safe parser passed explicitly, or a trusted local schema = legitimate).
+id: c2-xml-parse-call-sites
+language: python
+severity: error
+message: "XML parsed without safe_xml — use safe_xml.safe_xml_parse()/safe_xml_parser() for untrusted XML"
+note: "etree.parse(path, safe_parser) and trusted local schemas are classified per hit."
+rule:
+  any:
+    - pattern: etree.parse($$$ARGS)
+    - pattern: ET.parse($$$ARGS)
+    - pattern: lxml.etree.parse($$$ARGS)
+    - pattern: xml.etree.ElementTree.parse($$$ARGS)
