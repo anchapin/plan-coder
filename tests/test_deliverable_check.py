@@ -176,7 +176,7 @@ class TestGradeRunCli(unittest.TestCase):
             brief.write_text(brief_text, encoding="utf-8")
             argv += ["--brief", str(brief)]
         out = subprocess.run(argv, capture_output=True, text=True,
-                             timeout=60)
+                             timeout=60, check=False)
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         return json.loads(out.stdout)
 
@@ -228,7 +228,7 @@ class TestPromptContract(unittest.TestCase):
                 [sys.executable, str(REPO / "bin" / "render_prompts.py"),
                  "--config", str(REPO / "config" / "deployment.example.json"),
                  "--out", str(tmp)],
-                capture_output=True, text=True, timeout=120,
+                capture_output=True, text=True, timeout=120, check=False,
                 env={**os.environ, "PLAN_CODER_CONFIG": ""})
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
             sup = (tmp / "backlog-supervisor.rendered.md").read_text(
