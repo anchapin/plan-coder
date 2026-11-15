@@ -1,0 +1,2 @@
+{"ts": "2026-11-10T09:00:00Z", "name": "tier-ladder", "change": "the cheap tier gains the failover path"}
+{"ts": "2026-11-14T08:00:00Z", "name": "empty-diff-gate", "change": "the empty-diff gate counts as a hard failure"}
