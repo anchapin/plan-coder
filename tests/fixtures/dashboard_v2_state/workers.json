@@ -1,0 +1,26 @@
+{
+  "repo-a-4": {
+    "branch": "worker/4-d",
+    "issue": 4,
+    "note": "worker is still running",
+    "pr": null,
+    "provider_used": "minimax/MiniMax-M3 (flagship)",
+    "repo": "repo-a",
+    "started_at": "2026-11-14T22:00:00Z",
+    "status": "working",
+    "tokens": 4000,
+    "workdir": "/tmp/worktrees/repo-a-worker-4"
+  },
+  "repo-a-1": {
+    "branch": "worker/1-a",
+    "issue": 1,
+    "note": "PR opened and registered with the shepherd.",
+    "pr": "https://github.com/you/repo-a/pull/101",
+    "provider_used": "minimax/MiniMax-M2.5-highspeed (cheap)",
+    "repo": "repo-a",
+    "started_at": "2026-11-01T09:00:00Z",
+    "status": "done",
+    "tokens": 6000,
+    "workdir": "/tmp/worktrees/repo-a-worker-1"
+  }
+}
