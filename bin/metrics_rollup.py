@@ -60,8 +60,8 @@ from collections import Counter, defaultdict
 from datetime import UTC, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from shepherd_ledger import MERGE_ACTIONS  # noqa: E402
-from trace_summary import _bucket_stats, default_ledger_path  # noqa: E402
+from shepherd_ledger import MERGE_ACTIONS
+from trace_summary import _bucket_stats, default_ledger_path
 
 # The shepherd ledger only starts on 2026-11-09 (spec section 2).  It is
 # the fallback gap boundary when the shepherd ledger is missing or
@@ -468,8 +468,6 @@ def summarize(worker_rows, shepherd_rows, pr_rows, daily_rows,
     }
 
     if overall["runs"]:
-        median_txt = (f"{overall['tokens_out_median']:,}"
-                      if overall["tokens_out_median"] is not None else "—")
         merged_median = baseline["tokens_out_per_merged_pr_median"]
         merged_txt = (f"{merged_median:,.0f}" if merged_median is not None
                       else "—")
@@ -533,8 +531,8 @@ def write_rollup(path, rows):
     """Write the rollup cache: one JSON object per line, atomically."""
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
-        for row in rows:
-            fh.write(json.dumps(row, sort_keys=True, default=str) + "\n")
+        fh.writelines(json.dumps(row, sort_keys=True, default=str) + "\n"
+                      for row in rows)
     os.replace(tmp, path)
 
 

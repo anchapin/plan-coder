@@ -253,7 +253,7 @@ class RollupReadOnlyTest(unittest.TestCase):
                                      "--out", "-"])
         self.assertEqual(code, 0, err)
         self.assertEqual(fingerprint(self.state), before)
-        lines = [l for l in out.splitlines() if l.strip()]
+        lines = [line for line in out.splitlines() if line.strip()]
         self.assertTrue(lines)
         for line in lines:
             self.assertIn(json.loads(line)["type"], ("pr", "daily"))
