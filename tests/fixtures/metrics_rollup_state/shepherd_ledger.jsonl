@@ -1,0 +1,7 @@
+{"ts": "2026-11-09T10:00:00Z", "repo": "repo-a", "pr": 101, "pr_url": "https://github.com/you/repo-a/pull/101", "action": "needs_alex", "outcome": "flagged for the operator", "ci": "unknown", "merge_state": "", "detail": ""}
+{"ts": "2026-11-09T10:30:00Z", "repo": "repo-a", "pr": 101, "pr_url": "https://github.com/you/repo-a/pull/101", "action": "checked", "outcome": "ci green", "ci": "green", "merge_state": "", "detail": ""}
+{"ts": "2026-11-09T11:00:00Z", "repo": "repo-a", "pr": 101, "pr_url": "https://github.com/you/repo-a/pull/101", "action": "checked", "outcome": "ci green", "ci": "green", "merge_state": "", "detail": ""}
+{"ts": "2026-11-09T12:00:00Z", "repo": "repo-c", "pr": 999, "pr_url": "https://github.com/you/repo-c/pull/999", "action": "merged", "outcome": "merged by operator", "ci": "green", "merge_state": "CLEAN", "detail": ""}
+{"ts": "2026-11-09T13:00:00Z", "repo": "repo-a", "pr": 105, "pr_url": "https://github.com/you/repo-a/pull/105", "action": "checked", "outcome": "polled", "ci": "unknown", "merge_state": "", "detail": ""}
+{"ts": "2026-11-10T11:00:00Z", "repo": "repo-a", "pr": 101, "pr_url": "https://github.com/you/repo-a/pull/101", "action": "merged", "outcome": "merged by operator", "ci": "green", "merge_state": "CLEAN", "detail": ""}
+{"ts": "2026-11-12T09:00:00Z", "repo": "repo-a", "pr": 104, "pr_url": "https://github.com/you/repo-a/pull/104", "action": "merged_by_shepherd", "outcome": "merged by shepherd", "ci": "green", "merge_state": "UNSTABLE", "detail": "pre-existing failure"}
