@@ -1,0 +1,11 @@
+{
+  "base_prompt": "prompts/pr-shepherd.md",
+  "fixture_copy": "tests/fixtures/prompts/pr-shepherd-known-failure-clause-removed.md",
+  "removed_clause": "known_failure_exemption",
+  "expected_failing_specs": [
+    "merge_unstable_known_failure_exempted",
+    "merge_blocked_unstable_new_failure"
+  ],
+  "expected_base_score": 100.0,
+  "note": "Deliberate regression for the Phase 0 keep/revert demonstration (issue #55). The fixture copy is the live prompt with exactly one merge-policy sentence deleted: the known-failure exemption ('mergeStateStatus CLEAN is preferred, but UNSTABLE is acceptable when the only failures are pre-existing develop-wide issues already tracked in follow-up issues ... these must not block merges.'). The copy is a fixture: the live prompt in prompts/ is never modified. The failing specs name the missing clause."
+}
