@@ -35,8 +35,17 @@ meant to be compared against the outcome, not derived from it.
 Usage:
     python3 bin/grade_run.py --run-id <id> [--transcripts-dir DIR]
                              [--ledger PATH] [--report WORKER_REPORT.md]
-                             [--workdir DIR] [--json]
+                             [--workdir DIR] [--brief BRIEF.md] [--json]
     python3 bin/grade_run.py --transcript <run_id.jsonl> [...]
+
+Named-deliverable check (optional, issue #56): when the brief carries
+a `DELIVERABLE: <repo-relative path>` line, `--brief` makes the grader
+check that path against the worktree's final state.  A path that is
+absent is reported as `deliverable: missing` with the suggested
+outcome `failed:missing-deliverable` — the supervisor classifies it at
+collection time.  A brief without the line is checked exactly as
+before: no check, no flag, no score change.
+
 Exit 0 with a grade on stdout; exit 2 when the transcript cannot be read.
 """
 from __future__ import annotations
@@ -56,6 +65,23 @@ TEST_MARKERS = (
 )
 VERDICT_PASS = 70
 VERDICT_FLAG = 50
+
+# --- optional named-deliverable contract (issue #56) --------------------
+# A brief may carry one optional line:
+#
+#     DELIVERABLE: docs/perf-notes.md
+#
+# naming a repo-relative path the run must produce.  The line is
+# optional: a brief without it is graded exactly as before (no check,
+# no flag, no score change).  When it IS present, the path must exist
+# in the worktree's final state at collection time; a path that is
+# absent is a mechanical finding the supervisor classifies as
+# `failed:missing-deliverable` (see the supervisor prompt, steps 6/8).
+# The check is deliberately outside the score: the grade thresholds
+# were calibrated on 2026-11-07 against trajectory signals only.
+DELIVERABLE_RE = re.compile(
+    r"^[ \t>*\-`'\"]*DELIVERABLE:[ \t]*(.+?)[ \t]*$", re.MULTILINE)
+DELIVERABLE_NONE = {"", "none", "n/a", "na", "no", "null", "-"}
 
 
 def _parse_steps(value):
@@ -201,9 +227,79 @@ def claim_vs_diff(report_path: str | None, workdir: str | None) -> dict:
                       f"{len(claimed)} file(s)"}
 
 
+def parse_deliverable(brief_text: str) -> str | None:
+    """Return the repo-relative path named by a brief's `DELIVERABLE:`
+    line, or None when the brief names no deliverable.
+
+    The line is optional and backwards compatible: a brief without it
+    (or with `DELIVERABLE: none`) names no deliverable and no check
+    runs."""
+    for match in DELIVERABLE_RE.finditer(brief_text):
+        value = match.group(1).strip().strip("`\"'").strip()
+        if not value or value.lower() in DELIVERABLE_NONE:
+            continue
+        head = value.split(None, 1)[0]
+        if "=" in head:
+            value = value.split("=", 1)[1].strip()
+        if value:
+            return value
+    return None
+
+
+def check_deliverable(brief_path: str | None,
+                      workdir: str | None) -> dict:
+    """Check the brief's optional `DELIVERABLE:` contract against the
+    worktree's final state.
+
+    Returns {"status", "path", "detail"}.  Status is one of:
+
+      not_named  the brief names no deliverable — no check, no finding
+      present    the named path exists in the worktree
+      missing    the named path is absent from the worktree — the
+                 mechanical finding behind `failed:missing-deliverable`
+      unknown    the brief or the worktree could not be read, or the
+                 named path is not a repo-relative path inside the
+                 worktree — never a finding: an unreadable input
+                 never fails a run
+    """
+    result = {"status": "not_named", "path": None, "detail": ""}
+    if not brief_path:
+        return result
+    try:
+        with open(brief_path, encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+    except OSError as exc:
+        return {"status": "unknown", "path": None,
+                "detail": f"cannot read brief {brief_path}: {exc}"}
+    named = parse_deliverable(text)
+    if not named:
+        return result
+    result["path"] = named
+    if not workdir:
+        return {"status": "unknown", "path": named,
+                "detail": "no worktree supplied — deliverable not checked"}
+    if os.path.isabs(named):
+        return {"status": "unknown", "path": named,
+                "detail": "deliverable path is absolute — not checked"}
+    root = os.path.realpath(workdir)
+    full = os.path.realpath(os.path.join(root, named))
+    if full != root and not full.startswith(root + os.sep):
+        return {"status": "unknown", "path": named,
+                "detail": "deliverable path escapes the worktree — "
+                          "not checked"}
+    if os.path.exists(full):
+        result["status"] = "present"
+        result["detail"] = f"deliverable {named} exists in the worktree"
+    else:
+        result["status"] = "missing"
+        result["detail"] = f"deliverable {named} is absent from the worktree"
+    return result
+
+
 def grade(events: list, ledger_row: dict | None = None,
           report_path: str | None = None,
-          workdir: str | None = None) -> dict:
+          workdir: str | None = None,
+          brief_path: str | None = None) -> dict:
     step_events = [e for e in events
                    if isinstance(e.get("step"), int)]
     step_events.sort(key=lambda e: e["step"])
@@ -354,6 +450,12 @@ def grade(events: list, ledger_row: dict | None = None,
         verdict = "flag"
     else:
         verdict = "review"
+    # The named-deliverable check is a contract check, not a trajectory
+    # signal: it never moves the score (the thresholds were calibrated
+    # on the trajectory signals alone).  It reports a status the
+    # supervisor classifies at collection time.
+    deliverable = check_deliverable(brief_path, workdir)
+    missing = deliverable["status"] == "missing"
     return {
         "score": score,
         "verdict": verdict,
@@ -362,6 +464,10 @@ def grade(events: list, ledger_row: dict | None = None,
         "first_edit_step": first_edit,
         "test_runs": test_runs,
         "test_passed": test_passed,
+        "deliverable": deliverable,
+        "missing_deliverable": missing,
+        "suggested_outcome": ("failed:missing-deliverable"
+                              if missing else None),
     }
 
 
@@ -375,6 +481,9 @@ def main(argv=None) -> int:
                     help="WORKER_REPORT.md path (live runs only)")
     ap.add_argument("--workdir", default=None,
                     help="worker worktree (live runs only, for git check)")
+    ap.add_argument("--brief", default=None,
+                    help="BRIEF.md path (live runs only, for the "
+                         "optional DELIVERABLE: contract check)")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     path = args.transcript
@@ -394,7 +503,7 @@ def main(argv=None) -> int:
     if args.run_id and args.ledger:
         row = find_ledger_row(args.ledger, args.run_id)
     result = grade(events, ledger_row=row, report_path=args.report,
-                   workdir=args.workdir)
+                   workdir=args.workdir, brief_path=args.brief)
     result["run_id"] = args.run_id
     result["transcript"] = path
     if row:
@@ -407,6 +516,12 @@ def main(argv=None) -> int:
         for name, sig in result["signals"].items():
             print(f"  {name}: {sig['points']}/{sig['max']} "
                   f"({sig['value']}) — {sig['note']}")
+        deliverable = result["deliverable"]
+        if deliverable["status"] != "not_named":
+            print(f"  deliverable: {deliverable['status']} "
+                  f"({deliverable['path']}) — {deliverable['detail']}")
+        if result["missing_deliverable"]:
+            print(f"  SUGGESTED OUTCOME: {result['suggested_outcome']}")
     return 0
 
 
