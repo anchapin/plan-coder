@@ -20,6 +20,14 @@
 - The worker leaves the material (numbers, output paths); the supervisor assembles the PR's `## Proof` section from it at PR-creation time.
 - If an item above cannot be produced, say so in the report — the supervisor records it as an explicit `proof gap:` line, it is never silently dropped.
 
+## DELIVERABLE — the artefact this run must produce (optional)
+
+`DELIVERABLE: artefacts/retry-backoff/notes.md`
+
+- The line is optional. A brief without it is checked exactly as before — no deliverable check, no gate, no changed behaviour.
+- When the line is present, the named repo-relative path must exist in the worktree's final state at collection time. The collection-time grader checks it mechanically (`bin/grade_run.py --brief <BRIEF.md> --workdir <worktree>`) and a path that is absent is classified `failed:missing-deliverable`.
+- Name a deliverable only when the issue genuinely requires that specific artefact — never invent one to satisfy the check.
+
 ## Acceptance criteria
 
 1. Retry delays follow `min(30, 2^n) * jitter(0.5–1.0)` seconds for attempt `n`.
