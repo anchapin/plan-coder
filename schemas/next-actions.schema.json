@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plan-coder.local/schemas/next-actions.schema.json",
+  "title": "plan-coder next actions",
+  "description": "The manager's structured next-moves list (issue #73, Phase 0). Version 1: one document, one action list, one action vocabulary.",
+  "schema": 1,
+  "type": "object",
+  "required": ["schema", "generated_at", "state_dir", "actions", "counts"],
+  "properties": {
+    "schema": {"type": "integer", "const": 1},
+    "generated_at": {"type": "string"},
+    "state_dir": {"type": "string"},
+    "counts": {
+      "type": "object",
+      "additionalProperties": {"type": "integer"}
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "repo", "reason_1line", "evidence"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["merge", "flag", "split", "escalation", "backlog_empty"]
+          },
+          "repo": {"type": "string"},
+          "issue": {"type": ["integer", "null"]},
+          "pr": {"type": ["integer", "null"]},
+          "reason_1line": {"type": "string"},
+          "evidence": {"type": "array", "items": {"type": "string"}},
+          "reds_classified": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["red", "class"],
+              "properties": {
+                "red": {"type": "string"},
+                "class": {
+                  "type": "string",
+                  "enum": ["pr_specific", "repo_wide", "unknown"]
+                }
+              }
+            }
+          },
+          "underlying_question": {"type": "string"},
+          "ci_signal_present": {"type": "boolean"},
+          "workflow_touch": {
+            "type": "string",
+            "enum": ["workflows", "branch_protection", "release_config",
+                     "none"]
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

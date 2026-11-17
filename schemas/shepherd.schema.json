@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plan-coder.local/schemas/shepherd.schema.json",
+  "title": "plan-coder shepherd PR record",
+  "description": "One tracked PR as the shepherd sees it: the shepherd.json entry plus the read-only check facts (mergeable, CI classification, hard stops). Version 1.",
+  "schema": 1,
+  "type": "object",
+  "required": ["repo", "pr"],
+  "properties": {
+    "repo": {"type": ["string", "null"]},
+    "pr": {"type": ["integer", "null"]},
+    "pr_url": {"type": "string"},
+    "slug": {"type": ["string", "null"]},
+    "state": {"type": ["string", "null"]},
+    "mergeable": {"type": ["string", "null"]},
+    "merge_state": {"type": ["string", "null"]},
+    "added_at": {"type": ["string", "null"]},
+    "rerun_count": {"type": ["integer", "null"]},
+    "ci_fix_attempts": {"type": ["integer", "null"]},
+    "jittest_catch": {"type": "boolean"},
+    "flags": {"type": "array", "items": {"type": "string"}},
+    "workflow_touch": {"type": "string"},
+    "hard_stops": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "path"],
+        "properties": {
+          "kind": {"type": "string"},
+          "path": {"type": "string"}
+        }
+      }
+    },
+    "ci": {
+      "type": "object",
+      "properties": {
+        "classification": {
+          "type": "string",
+          "enum": ["green", "pr_specific", "repo_wide", "unknown"]
+        },
+        "reason": {"type": "string"},
+        "failing": {"type": "array", "items": {"type": "string"}},
+        "known_repo_wide": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "evidence": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}
