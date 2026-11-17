@@ -17,6 +17,7 @@ written to the transcript or report.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -195,6 +196,12 @@ Rules:
 - Do NOT ask the user questions; make reasonable choices and note them.
 - When done (or stuck), write a final summary: what changed, test results,
   and anything you could not resolve.
+- Tool output can be capped. When a tool result carries a "[ctx]" summary and
+  a handle, the full output was stored on disk and part of it was dropped from
+  your context on purpose. Before you rely on a capped result, call ctx_read
+  with that handle (add start_line/end_line, or a needle, to narrow it) to
+  retrieve the missing part. Never assume dropped content is gone, and never
+  report a fact you only saw in the dropped part without retrieving it first.
 """
 
 TOOLS = [
@@ -274,6 +281,241 @@ TOOLS = [
         },
     },
 ]
+
+# --- Context Mode: stored tool output + ctx_read retrieval ---------------
+# Issue #52, built from docs/spikes/headroom-phase1.md (Probe C -- Context
+# Mode pattern: PASS with caveats).  The pattern: raw tool output is written
+# to a per-run store on disk, and the context receives a capped summary plus
+# a handle; `ctx_read` puts the raw output back into the context on demand.
+# The measured basis: capping stored output at 6 lines / 400 chars with the
+# full output recoverable removed 26.36% of a replayed tool-heavy context,
+# and the dropped information stayed recoverable for ~0.3% of that context.
+#
+# OFF by default: the live A/B (stored-output on vs off) is the acceptance
+# gate for this build and has not run yet, so the harness keeps its current
+# behaviour until the supervisor validates it.  Enable with --stored-output
+# or WORKER_STORED_OUTPUT=1.
+
+CTX_HANDLE_PREFIX = "ctx:"
+# The cap the Phase 1 report measured (6 lines / 400 chars); it was a
+# plausible default there, not an optimised one, so both are overridable.
+CTX_SUMMARY_MAX_LINES = int(os.environ.get("WORKER_CTX_MAX_LINES", "6"))
+CTX_SUMMARY_MAX_CHARS = int(os.environ.get("WORKER_CTX_MAX_CHARS", "400"))
+# How much a single ctx_read may put back into the context at once (the
+# old exec cap, so one retrieval costs no more than the output it replaces).
+CTX_READ_MAX_CHARS = int(os.environ.get("WORKER_CTX_READ_MAX_CHARS", "8000"))
+# The store keeps at most this much of one tool output on disk; beyond it
+# the stored copy is itself capped, and the summary says so.
+CTX_STORE_MAX_CHARS = int(os.environ.get("WORKER_CTX_STORE_MAX_CHARS",
+                                          "1000000"))
+
+CTX_READ_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "ctx_read",
+        "description": (
+            "Retrieve stored tool output by handle. Use it whenever a tool "
+            "result carries a [ctx] summary: the full output was stored on "
+            "disk and part of it was dropped from the context. Narrow the "
+            "result with a line range or a needle when the output is large."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "handle": {"type": "string",
+                           "description": "handle from the [ctx] summary, "
+                                          "e.g. ctx:ab12cd34ef56"},
+                "start_line": {"type": "integer",
+                               "description": "first line to return "
+                                              "(1-based, default 1)"},
+                "end_line": {"type": "integer",
+                             "description": "last line to return "
+                                            "(default: last line)"},
+                "needle": {"type": "string",
+                           "description": "return only the lines that "
+                                          "contain this text"},
+            },
+            "required": ["handle"],
+        },
+    },
+}
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    """Read a boolean environment flag ("1"/"true"/"yes"/"on" = on)."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _as_int(value, default: int) -> int:
+    """Coerce a tool argument to an int; anything unusable falls back."""
+    if value is None or isinstance(value, bool):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _stored_output_enabled(cli_value: bool | None = None) -> bool:
+    """Resolve the Context Mode switch.
+
+    The CLI flag wins, then $WORKER_STORED_OUTPUT, then the default: off.
+    Off is the default because the live A/B (stored-output on vs off) is
+    the acceptance gate for this build and has not run yet -- the harness
+    keeps its pre-#52 behaviour until the supervisor validates the mode.
+    """
+    if cli_value is None:
+        return _env_flag("WORKER_STORED_OUTPUT", False)
+    return bool(cli_value)
+
+
+def _atomic_write_text(full: str, content: str) -> None:
+    """Write a file atomically: temp file in the same directory, then
+    os.replace. A failed or interrupted write never leaves the target
+    truncated (a truncate-in-place open("w") destroyed files in the
+    2026-10-26 write fault)."""
+    directory = os.path.dirname(full) or "."
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".agent-write-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(content)
+        os.replace(tmp, full)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+class ContextStore:
+    """Per-run store of raw tool output (Context Mode).
+
+    One file per stored output, content-addressed by the sha256 of the
+    stored text: the handle is stable, the same output is stored once, and
+    the file name can be recomputed from the handle alone.  The store lives
+    outside the worktree (next to the run's transcript) so a run's scratch
+    never looks like a worktree change to the empty-diff gate."""
+
+    def __init__(self, directory: str, max_chars: int = CTX_STORE_MAX_CHARS):
+        self.directory = directory
+        self.max_chars = max_chars
+        self.meta: dict[str, dict] = {}
+        os.makedirs(directory, exist_ok=True)
+
+    @staticmethod
+    def handle_for(text: str) -> str:
+        digest = hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()
+        return CTX_HANDLE_PREFIX + digest[:12]
+
+    def _path(self, handle: str) -> str | None:
+        name = handle.strip()
+        if not name.startswith(CTX_HANDLE_PREFIX):
+            return None
+        stem = name.removeprefix(CTX_HANDLE_PREFIX)
+        if not stem or any(c not in "0123456789abcdef" for c in stem):
+            return None
+        return os.path.join(self.directory, stem + ".txt")
+
+    def put(self, text: str) -> str:
+        """Store raw output; return its handle. The stored copy is capped
+        at max_chars; how much was left out is recorded in meta[handle] so
+        the summary can say so (nothing is dropped silently)."""
+        handle = self.handle_for(text)
+        stored = text
+        dropped = 0
+        if len(text) > self.max_chars:
+            stored = text[:self.max_chars]
+            dropped = len(text) - len(stored)
+        path = self._path(handle)
+        if path is None:  # pragma: no cover - handle_for always fits
+            raise ValueError(f"invalid handle: {handle}")
+        _atomic_write_text(path, stored)
+        self.meta[handle] = {
+            "total_chars": len(text),
+            "stored_chars": len(stored),
+            "dropped_chars": dropped,
+        }
+        return handle
+
+    def get(self, handle: str) -> str | None:
+        path = self._path(handle)
+        if path is None:
+            return None
+        try:
+            with open(path, encoding="utf-8", errors="replace") as fh:
+                return fh.read()
+        except OSError:
+            return None
+
+
+def _ctx_store_dir(workdir: str, transcript_dir: str, run_id: str) -> str:
+    """Where this run's Context Mode store lives.
+
+    Default: a per-run directory next to the run's transcript, i.e.
+    outside the worktree -- a store inside the worktree would look like a
+    worker edit to the empty-diff gate.  $WORKER_CTX_STORE_DIR overrides
+    the root.  A store that would land inside the workdir is refused and a
+    temporary directory outside it is used instead."""
+    root = os.path.expanduser(
+        os.environ.get("WORKER_CTX_STORE_DIR")
+        or os.path.join(transcript_dir, "ctx"))
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "-", run_id) or "run"
+    directory = os.path.join(root, safe)
+    real = os.path.realpath(directory)
+    base = os.path.realpath(workdir)
+    if real == base or real.startswith(base + os.sep):
+        return tempfile.mkdtemp(prefix="pc-ctx-")
+    return directory
+
+
+def summarize_stored_output(text: str, handle: str,
+                            max_lines: int = CTX_SUMMARY_MAX_LINES,
+                            max_chars: int = CTX_SUMMARY_MAX_CHARS,
+                            store_meta: dict | None = None) -> str:
+    """Capped summary of a stored tool output.
+
+    The summary says how big the output is, shows the capped head, states
+    exactly how many lines and characters were dropped, and names the
+    handle to retrieve the rest with.  Nothing is dropped silently.
+
+    The counts are over the line-joined text: a trailing newline is not
+    content, so it is not counted as kept or as dropped.
+    """
+    lines = text.splitlines()
+    total_lines = len(lines)
+    total_chars = len("\n".join(lines))
+    body = "\n".join(lines[:max_lines])
+    if len(body) > max_chars:
+        body = body[:max_chars]
+    kept_lines = len(body.splitlines())
+    kept_chars = len(body)
+    dropped_lines = total_lines - kept_lines
+    dropped_chars = total_chars - kept_chars
+    out = [(f"[ctx] stored output: {total_lines} lines, {total_chars} chars "
+            f"(handle {handle})")]
+    if body:
+        out.append(body)
+    if dropped_lines or dropped_chars:
+        out.append(
+            f"[ctx] TRUNCATED for context: kept {kept_lines} lines / "
+            f"{kept_chars} chars, dropped {dropped_lines} lines / "
+            f"{dropped_chars} chars -- retrieve the dropped part with "
+            f'ctx_read(handle="{handle}", start_line={kept_lines + 1})')
+    else:
+        out.append(
+            f'[ctx] complete: nothing dropped; the full output is also '
+            f'readable with ctx_read(handle="{handle}")')
+    meta = store_meta or {}
+    if meta.get("dropped_chars"):
+        out.append(
+            f'[ctx] note: the stored copy itself was capped at '
+            f'{meta.get("stored_chars")} chars, so {meta.get("dropped_chars")} '
+            f'chars of this output were never stored and cannot be retrieved')
+    return "\n".join(out)
 
 
 # Empty-diff completion gate (adapted from Raven's completion_gates.py): a
@@ -376,7 +618,8 @@ def _tool_result_kind(result: str) -> str:
 
 def _machine_manifest(workdir: str, base: str | None, gate_triggers: int,
                       midrun_triggers: int = 0,
-                      token_cap: tuple | None = None) -> str:
+                      token_cap: tuple | None = None,
+                      stored_output: bool = False) -> str:
     """Harness-generated git facts for the supervisor to verify.
     Never model prose: unreadable facts degrade to status unknown with a
     named blocker instead of a fabricated 'ready'."""
@@ -416,6 +659,8 @@ def _machine_manifest(workdir: str, base: str | None, gate_triggers: int,
             lines.append("```")
     lines.append(f"- gate_triggers: empty_diff={gate_triggers}, "
                  f"midrun_no_edit={midrun_triggers}")
+    lines.append(f"- stored_output: {'on' if stored_output else 'off'} "
+                 "(Context Mode: raw tool output stored + ctx_read)")
     if token_cap is not None:
         total_out, cap = token_cap
         lines.append(f"- token_cap: {'tripped' if total_out >= cap else 'not tripped'} "
@@ -424,11 +669,16 @@ def _machine_manifest(workdir: str, base: str | None, gate_triggers: int,
 
 
 class Worker:
-    def __init__(self, workdir: str, exec_timeout: int):
+    def __init__(self, workdir: str, exec_timeout: int,
+                 ctx_store: ContextStore | None = None):
         self.workdir = os.path.realpath(workdir)
         self.exec_timeout = exec_timeout
         self.files_changed: list[str] = []
         self.commands: list[str] = []
+        # Context Mode: when a store is attached, exec/read_file store
+        # their raw output on disk and return a capped summary + handle;
+        # ctx_read puts the raw output back into the context on demand.
+        self.ctx_store = ctx_store
 
     def _safe(self, path: str) -> str:
         full = os.path.realpath(os.path.join(self.workdir, path))
@@ -448,6 +698,11 @@ class Worker:
                 return self._edit(args["path"], args["old_text"], args["new_text"])
             if name == "list_dir":
                 return self._list(args.get("path", "."))
+            if name == "ctx_read":
+                return self._ctx_read(args.get("handle", ""),
+                                      args.get("start_line"),
+                                      args.get("end_line"),
+                                      args.get("needle"))
             return f"unknown tool: {name}"
         except Exception as exc:  # noqa: BLE001
             return f"tool error: {type(exc).__name__}: {exc}"
@@ -469,9 +724,81 @@ class Worker:
         except subprocess.TimeoutExpired:
             return f"TIMEOUT after {timeout}s: {command}"
         out = (proc.stdout or "") + (proc.stderr or "")
+        if self.ctx_store is not None:
+            return self._exec_stored(proc.returncode, out)
         if len(out) > 8000:
             out = out[:8000] + "\n...[truncated]"
         return f"exit={proc.returncode}\n{out.strip()}"
+
+    def _exec_stored(self, returncode: int, out: str) -> str:
+        """Context Mode exec: the raw output goes to the store, the context
+        gets a capped summary plus a handle.
+
+        The leading "exit=<code>" line is preserved verbatim: bin/grade_run.py
+        detects test evidence by it and the tool-kind taxonomy reads the code
+        from it, so the [ctx] summary goes *after* that line, never before.
+        """
+        body = out.strip()
+        if not body:
+            return f"exit={returncode}\n"
+        try:
+            text = _redact(body)
+            handle = self.ctx_store.put(text)
+        except OSError as exc:
+            # The store failed: fall back to the legacy cap, but say what
+            # was dropped -- a silent drop is exactly what this mode exists
+            # to prevent.
+            capped = body[:8000]
+            dropped = len(body) - len(capped)
+            return (f"exit={returncode}\n{capped}\n...[truncated]\n"
+                    f"[ctx] storage failed ({type(exc).__name__}: {exc}); "
+                    f"{dropped} chars dropped and NOT retrievable")
+        summary = summarize_stored_output(
+            text, handle, store_meta=self.ctx_store.meta.get(handle))
+        return f"exit={returncode}\n{summary}"
+
+    def _ctx_read(self, handle: str, start_line=None, end_line=None,
+                  needle: str | None = None) -> str:
+        """Put a stored tool output back into the context.
+
+        The handle comes from a [ctx] summary; start_line/end_line narrow it
+        to a line range and needle keeps only the matching lines.  The
+        returned text is capped, and the cap states what was left out.
+        """
+        if self.ctx_store is None:
+            return ("ctx_read: stored-output mode is off, so no output was "
+                    "stored and no handle exists.")
+        handle = str(handle or "").strip()
+        text = self.ctx_store.get(handle)
+        if text is None:
+            return (f"ctx_read: unknown handle {handle!r} -- no stored "
+                    "output with that handle in this run.")
+        lines = text.splitlines()
+        total = len(lines)
+        start = _as_int(start_line, 1)
+        end = _as_int(end_line, total)
+        start = max(1, min(start, max(total, 1)))
+        end = max(start - 1, min(end, total))
+        selected = lines[start - 1:end]
+        if needle:
+            needle = str(needle)
+            selected = [line for line in selected if needle in line]
+        body = "\n".join(selected)
+        header = (f"[ctx] ctx_read handle={handle} lines {start}-{end} of "
+                  f"{total} ({len(selected)} lines, {len(body)} chars of "
+                  f"{len(text)})")
+        if needle:
+            header += f' needle="{needle}"'
+        if not selected:
+            return header + ":\n[ctx] no matching lines"
+        if len(body) > CTX_READ_MAX_CHARS:
+            dropped = len(body) - CTX_READ_MAX_CHARS
+            body = body[:CTX_READ_MAX_CHARS]
+            return (f"{header}:\n{body}\n"
+                    f"[ctx] TRUNCATED: {dropped} more chars are available -- "
+                    "narrow the range with start_line/end_line or use a "
+                    "needle")
+        return f"{header}:\n{body}"
 
     def _read(self, path: str, offset: int, limit: int) -> str:
         full = self._safe(path)
@@ -480,9 +807,31 @@ class Worker:
         start = max(0, offset - 1)
         chunk = lines[start : start + limit]
         text = "".join(chunk)
+        header = (f"{path} (lines {offset}-{offset + len(chunk) - 1} of "
+                  f"{len(lines)}):")
+        if self.ctx_store is not None:
+            # Context Mode read: store the whole chunk, return a capped
+            # summary plus a handle (the old 12000-char cap dropped text
+            # silently -- the summary says what was dropped instead).
+            body = text.strip()
+            if not body:
+                return header
+            try:
+                stored_text = _redact(body)
+                handle = self.ctx_store.put(stored_text)
+            except OSError as exc:
+                capped = body[:12000]
+                dropped = len(body) - len(capped)
+                return (f"{header}\n{capped}\n...[truncated]\n"
+                        f"[ctx] storage failed ({type(exc).__name__}: {exc}); "
+                        f"{dropped} chars dropped and NOT retrievable")
+            summary = summarize_stored_output(
+                stored_text, handle,
+                store_meta=self.ctx_store.meta.get(handle))
+            return f"{header}\n{summary}"
         if len(text) > 12000:
             text = text[:12000] + "\n...[truncated]"
-        return f"{path} (lines {offset}-{offset + len(chunk) - 1} of {len(lines)}):\n{text}"
+        return f"{header}\n{text}"
 
     @staticmethod
     def _atomic_write(full: str, content: str) -> None:
@@ -490,18 +839,7 @@ class Worker:
         # into place, so a failed/interrupted write never leaves the
         # target truncated (a truncate-in-place open("w") destroyed
         # files in the 2026-10-26 write fault).
-        directory = os.path.dirname(full) or "."
-        fd, tmp = tempfile.mkstemp(dir=directory, prefix=".agent-write-")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                fh.write(content)
-            os.replace(tmp, full)
-        except BaseException:
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
-            raise
+        _atomic_write_text(full, content)
 
     def _write(self, path: str, content: str) -> str:
         full = self._safe(path)
@@ -678,7 +1016,19 @@ def main() -> int:
                     help="directory for the JSONL transcript log "
                          "(default: $PLAN_CODER_TRANSCRIPT_DIR or "
                          "~/.plan-coder/transcripts)")
+    ap.add_argument("--stored-output", dest="stored_output",
+                    action="store_true", default=None,
+                    help="Context Mode: store raw tool output on disk and "
+                         "return a capped summary plus a handle (default: "
+                         "off; on when $WORKER_STORED_OUTPUT=1)")
+    ap.add_argument("--no-stored-output", dest="stored_output",
+                    action="store_false",
+                    help="Context Mode off (the pre-#52 behaviour)")
     args = ap.parse_args()
+
+    # Context Mode switch: CLI wins, then the environment, then the
+    # default (off -- the live A/B has not validated the mode yet).
+    stored_output = _stored_output_enabled(args.stored_output)
 
     provider_names = [p.strip() for p in args.provider.split(",") if p.strip()]
     unknown = [p for p in provider_names if p not in PROVIDERS]
@@ -715,6 +1065,13 @@ def main() -> int:
     os.makedirs(transcript_dir, exist_ok=True)
     transcript_path = os.path.join(transcript_dir, f"{run_id}.jsonl")
 
+    # Context Mode store: one directory per run, next to the transcript.
+    ctx_store = None
+    ctx_store_dir = ""
+    if stored_output:
+        ctx_store_dir = _ctx_store_dir(workdir, transcript_dir, run_id)
+        ctx_store = ContextStore(ctx_store_dir)
+
     def _trunc(value: object, limit: int) -> str:
         text = str(value)
         return text if len(text) <= limit else text[:limit] + "...[truncated]"
@@ -744,12 +1101,17 @@ def main() -> int:
             max_tokens_out = 0
 
     tlog({"event": "started", "run_id": run_id, "tier": tier,
-          "chain": [f"{n}/{m}" for n, _, m in chain]})
+          "chain": [f"{n}/{m}" for n, _, m in chain],
+          "stored_output": stored_output,
+          "ctx_store_dir": ctx_store_dir or None})
 
     with open(args.brief, encoding="utf-8") as fh:
         brief = fh.read()
 
-    worker = Worker(workdir, args.exec_timeout)
+    worker = Worker(workdir, args.exec_timeout, ctx_store=ctx_store)
+    # Context Mode: the retrieval tool is advertised only when the mode is
+    # on, so an off run is byte-for-byte the pre-#52 tool set.
+    tools = list(TOOLS) + ([CTX_READ_TOOL] if ctx_store is not None else [])
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": brief},
@@ -775,7 +1137,7 @@ def main() -> int:
         nonlocal final_text, total_in, total_out
         step_started = time.monotonic()
         try:
-            data, used_provider, used_model = chat(chain, messages, TOOLS)
+            data, used_provider, used_model = chat(chain, messages, tools)
             providers_used.add(f"{used_provider}/{used_model}")
         except RuntimeError as exc:
             tlog({"step": steps_used, "event": "aborted",
@@ -890,7 +1252,8 @@ def main() -> int:
         + _machine_manifest(workdir, base_commit, gate_triggers,
                             midrun_triggers,
                             token_cap=((total_out, max_tokens_out)
-                                     if max_tokens_out else None))
+                                     if max_tokens_out else None),
+                            stored_output=stored_output)
         + "\n"
     )
     with open(os.path.join(workdir, "WORKER_REPORT.md"), "w", encoding="utf-8") as fh:
@@ -903,7 +1266,9 @@ def main() -> int:
           "gate_triggers": gate_triggers,
           "midrun_gate_triggers": midrun_triggers,
           "token_cap": token_cap_tripped,
-          "max_tokens_out": max_tokens_out})
+          "max_tokens_out": max_tokens_out,
+          "stored_output": stored_output,
+          "ctx_store_dir": ctx_store_dir or None})
     _tlog.close()
     print(report)
     return 0
