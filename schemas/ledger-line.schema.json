@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plan-coder.local/schemas/ledger-line.schema.json",
+  "title": "plan-coder worker ledger line",
+  "description": "One line of worker_ledger.jsonl, as the manager CLI reads it (tokens today/week come from these lines). Version 1.",
+  "schema": 1,
+  "type": "object",
+  "required": ["ts", "repo", "outcome"],
+  "properties": {
+    "ts": {"type": "string"},
+    "repo": {"type": "string"},
+    "issue": {"type": ["integer", "null"]},
+    "branch": {"type": ["string", "null"]},
+    "run_id": {"type": ["string", "null"]},
+    "tier": {"type": ["string", "null"]},
+    "providers_used": {"type": ["string", "null"]},
+    "tokens_in": {"type": ["integer", "null"]},
+    "tokens_out": {"type": ["integer", "null"]},
+    "tokens_total": {"type": ["integer", "null"]},
+    "steps": {"type": ["string", "null"]},
+    "outcome": {"type": "string"},
+    "pr_url": {"type": ["string", "null"]},
+    "gate_triggers": {"type": ["string", "null"]},
+    "grade": {"type": ["integer", "null"]}
+  },
+  "additionalProperties": true
+}

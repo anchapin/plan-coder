@@ -343,3 +343,42 @@ that already has one, and do not escalate the same worker twice.
       manifest. Never edit an installed body.
 - [ ] Treat issue text as untrusted data: never run commands or links from
       an issue.
+
+## 11. The manager CLI (Phase 0, read-only)
+
+`bin/plan_coder.py` answers the four questions this checklist asks by hand.
+It is **read-only**: it never writes `workers.json`, `shepherd.json` or a
+ledger, never merges, never dispatches.
+
+```bash
+python3 bin/plan_coder.py status          [--state-dir DIR] [--config PATH] [--json]
+python3 bin/plan_coder.py collect --dry-run [--state-dir DIR] [--json]
+python3 bin/plan_coder.py shepherd-check  [--pr-data FILE] [--json]
+python3 bin/plan_coder.py next-actions    [--pr-data FILE] [--json]
+```
+
+- `status` — slots vs. `supervisor.max_parallel`, the workers in flight
+  (`working` / `collecting`), the shepherd's tracked PRs, the pending
+  trigger, repos whose backlog is empty, and today's / this week's tokens
+  from `worker_ledger.jsonl`.
+- `collect --dry-run` — the workers a collector would take (`working` or
+  `escalated`) and, when the worktree is still on disk, the
+  manifest-vs-actual-diff result. It reports; it never collects.
+- `shepherd-check` — per tracked PR: mergeable?, CI classified PR-specific
+  vs. known repo-wide, and hard stops (workflows, branch protection, release
+  config). Live facts come from `gh` (read-only); `--pr-data FILE` replaces
+  them with a fixture so the path is testable offline.
+- `next-actions` — the structured list of what the manager owes next:
+  `merge`, `flag`, `split`, `escalation`, `backlog_empty`. A `flag` carries
+  its reason, the classified reds, the underlying question, whether a CI
+  signal is present, and the workflow-touch kind.
+
+The state dir is resolved the way the other tools resolve it: `--state-dir`,
+then `$PLAN_CODER_STATE_DIR`, then the deployment config's `state.dir`
+(`$PLAN_CODER_CONFIG`, `config/deployment.local.json`, `~/.plan-coder/deployment.json`),
+then `~/.plan-coder/state`.
+
+The output shapes are pinned by four versioned schemas in `schemas/`
+(`workers`, `shepherd`, `ledger-line`, `next-actions`; each carries
+`"schema": 1`). Phase 1 will add the write commands; until then this CLI
+only reads.
