@@ -35,6 +35,8 @@ Token plans (flat-rate coding plans from z.ai, MiniMax, and similar providers) r
 | `prompts/backlog-supervisor.md` | Orchestration prompt: collect stragglers, pick issues, isolate worktrees, write briefs with a code-discipline section, launch workers, review, PR, ledger |
 | `prompts/pr-shepherd.md` | Orchestration prompt: CI triage, flake reruns, bounded mechanical fixes, and the merge policy |
 | `prompts/harness-tune.md` | Orchestration prompt: the weekly evidence-gated self-improvement pass |
+| `AGENTS.md` | The manager entry point for any agent host: roles (the manager owns judgment, the worker only types), the run lifecycle, the never-dos, where each operation lives, how to see status today, and when to escalate to the human. `CLAUDE.md` and `SKILL.md` are thin pointers to it |
+| `docs/MANAGER.md` | The host-neutral manager checklist, extracted from the three prompts: issue selection, brief discipline (code discipline + stale-test protocol), collect/review verification, merge policy and hard stops, escalation kinds |
 | `docs/OPERATIONS.md` | The operating policy in prose: isolation rules, tier routing, verification discipline, merge hard stops, ledger schema |
 | `docs/ARCHITECTURE.md` | How the pieces fit: roles, state files, and the run lifecycle |
 | `examples/` | A sample brief, sample ledger lines, and a sample worker-state file (all synthetic) |
