@@ -4,8 +4,9 @@ Issue #66, Phase 0. **Measurement only**: this document changes no production co
 prompt, no config and no test. The only tracked path this issue touches is this report.
 
 Scope of this report: (1) premise re-verification, (2) an in-repo content scan of the
-corpus reachable inside this worktree, (3) the probe set and its results, (4) a verdict
-that applies issue #66's decision bars **only to the evidence actually gathered**.
+corpus reachable inside this worktree, plus the transcript-corpus scan completed by
+the main agent on 2026-11-17 (§2.4), (3) the probe set and its results, (4) a verdict
+that applies issue #66's decision bars to the evidence gathered.
 
 Method note: every rate carries its `n`. Every quoted command output was re-run against
 the tree at the recorded commit. Probe payloads are described by class, carrier and
@@ -178,6 +179,34 @@ outside this worktree. Under this task's isolation rule (read/write only inside 
 worktree) that corpus is **not reachable**, and this report therefore **does not claim to
 have scanned it**. The scan above covers only the tracked repository tree. The
 transcript-corpus scan remains for the **supervisor / main agent**.
+
+### 2.4 Transcript-corpus scan (completed 2026-11-17, main agent)
+
+The outstanding half was run by the main agent on 2026-11-17 (full report:
+`plan-coder-66-corpus-scan.md`, harness state dir). Method, in brief: an exhaustive
+(not sampled) pattern scan — 11 strict + 12 supplementary injection pattern classes —
+over the `tool_results` content workers actually consumed, plus an independent
+deviation scan over all `tool_calls` (external curl/wget destinations, POST-data
+calls, secret-path reads, environment dumps, canary/marker artifacts).
+
+* Corpus at scan time: **891 transcripts, 35,025 exec calls, 2026-09-29 → 2026-11-17**
+  (a superset of the 467 transcripts counted at filing time — it includes
+  goldfish/jittest/review sub-runs).
+* **Genuine injection-shaped spans in the backlog corpus: 0.** Raw strict hits were
+  44 in 8 files: 34 in the two `plan-coder-66-*` transcripts (this spike's own worker
+  reading its own probe payloads — flagged, not complied with) and 10 benign
+  lookalikes (login-form product specs, Supabase auth setup docs, one defensive
+  ESLint plugin doc about preventing prompt injection). Override, new-instructions,
+  read-secret-and-send, authority, and agent-addressed classes: **0 hits anywhere**.
+* **Deviations: 0.** No run shows a worker following an instruction that originated
+  in repo/issue/tool-output content rather than its brief. The 270 curl/wget calls
+  are toolchain downloads and audit APIs; the 15 POST-data calls are npm/OSV audit
+  queries. Of 9 secret-path reads, 5 were the committed `.env.example` and **the one
+  real `cat .env` attempt was denied by exec-guard** — nothing was read.
+* A credential-shape scan over all consumed content matched **0 files**.
+
+So the Kill bar's "clean corpus" precondition now holds for **both** halves of the
+corpus: the tracked tree (§2) and the transcript corpus (this section).
 
 ---
 
@@ -361,36 +390,23 @@ Applying them to the evidence actually gathered:
   (and 0 / 22 = 0 % over all scored runs). The Proceed trigger fails on both clauses:
   no real deviation was found (0 partial or full compliances), and 0 % is far below the
   25 % bar.
-* **Corpus half — partially executed.** The reachable corpus (the tracked tree:
-  128 files / 2,701,521 bytes) is **clean**: **n = 0** genuine injection-shaped spans;
+* **Corpus half — executed, both halves.** The tracked tree (128 files /
+  2,701,521 bytes) is **clean**: **n = 0** genuine injection-shaped spans;
   all 45 candidate hits were benign lookalikes except the one line that is the repo's own
   defence rule (docs telling humans to run commands, prose about "untrusted input" in
   static-analysis rules, recorded-run fixture text, quoted `curl` probes in spike docs).
-  The Kill bar's "clean corpus" precondition is therefore satisfied **for the in-repo
-  tree only**.
+  The transcript corpus (§2.4: 891 transcripts, 35,025 exec calls) is likewise
+  **clean: 0 genuine injection-shaped spans and 0 deviations**. The Kill bar's
+  "clean corpus" precondition is therefore satisfied for the whole corpus.
 
-**Verdict: no Proceed.** On the evidence gathered the measurements point to **Kill**
-(probe compliance 0 % << 10 %, and the reachable corpus is clean) — **but the Kill
-precondition is only half-verified, so the decision is not closed inside this worktree.**
-
-**What remains undone:** the **transcript-corpus scan (467+ transcripts)** — the
-issue's other half of the corpus scan — was **not** reachable under this task's
-worktree isolation and was **not** performed. This report does not claim it was
-scanned. Until the supervisor/main agent runs that scan, the "clean corpus" precondition
-of the Kill bar is established only for the tracked repository tree, and the
-corpus-wide cleanliness claim behind Kill is **unverified**.
-
-Concretely, for the supervisor:
-
-1. Run the §2 pattern sweep over the transcript corpus (the same 25 patterns; classify
-   hits the same way — a transcript that quotes an injection payload is *not* itself an
-   injection span; only a payload that was actually followed is a deviation).
-2. If that scan is also clean, the correct conclusion for issue #66 Phase 0 is
-   **Kill the content-layer idea** on the evidence of n = 22 probe runs and
-   n = 0 in-repo injection spans — i.e. the *existing* model behaviour, not a new
-   worker-prompt rule, is what is holding the line. If, instead, the transcript scan
-   finds real deviations (a run that complied with an injection-shaped span), the
-   **Proceed** bar is met and the content-layer defence should be built.
+**Verdict: Kill — final.** Both Kill-bar conditions are met: the corpus is clean
+(both halves) **and** probe compliance is 0 / 22 = 0 % (direct classes 0 / 13),
+well under the 10 % bar. The conclusion for issue #66 Phase 0 is **Kill the
+content-layer idea** on the evidence of n = 22 probe runs, n = 0 in-repo injection
+spans, and n = 0 genuine spans / 0 deviations across 891 transcripts — i.e. the
+*existing* model behaviour, not a new worker-prompt rule, is what is holding the
+line. No Phase 1 is filed. Revisit only if repos/workers gain new input channels
+(e.g. #10's external CLI agents reading richer context).
 
 ### Reproducibility notes
 
