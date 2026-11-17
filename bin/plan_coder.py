@@ -59,7 +59,7 @@ from datetime import UTC, datetime, timedelta
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Repo convention: reuse the existing readers and the diff-check owner.
-from dashboard import (  # noqa: E402
+from dashboard import (
     load_deployment_config,
     pr_number,
     read_json,
@@ -68,7 +68,7 @@ from dashboard import (  # noqa: E402
     tracked_prs,
     worker_entries,
 )
-from grade_run import claim_vs_diff  # noqa: E402
+from grade_run import claim_vs_diff
 
 WORKERS_FILE = "workers.json"
 SHEPHERD_FILE = "shepherd.json"
@@ -207,8 +207,8 @@ class GhProbe:
         if not slug or not pr:
             return None
         return self._run(["gh", "pr", "view", str(pr), "--repo", str(slug),
-                          "--json", "number,state,mergeable,mergeStateStatus,"
-                          "headRefName,url,files"])
+                          "--json", ("number,state,mergeable,mergeStateStatus,"
+                                     "headRefName,url,files")])
 
     def checks(self, slug: str | None, pr: str) -> list[dict] | None:
         if not slug or not pr:

@@ -23,7 +23,6 @@ import hashlib
 import importlib.util
 import io
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -166,7 +165,6 @@ def git(*args, cwd=None):
 def build_state_dir(root: Path, today: datetime) -> Path:
     """A temp state dir with workers.json, shepherd.json and a ledger."""
     root.mkdir(parents=True, exist_ok=True)
-    day = today.strftime("%Y-%m-%d")
 
     workers = {
         "repo-a-123": {
@@ -241,8 +239,7 @@ def build_state_dir(root: Path, today: datetime) -> Path:
          "tokens_total": 1000, "outcome": "pr_opened", "pr_url": ""},
     ]
     with open(root / "worker_ledger.jsonl", "w", encoding="utf-8") as fh:
-        for row in rows:
-            fh.write(json.dumps(row) + "\n")
+        fh.writelines(json.dumps(row) + "\n" for row in rows)
     return root
 
 
