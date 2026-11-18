@@ -77,6 +77,12 @@
       "max_files": 5,
       "max_diff_lines": 300,
       "max_three_state_runs": 3
+    },
+    "worktree_persistence": {
+      "_about": "Worktree persistence Phase 1 (plan-coder #87 Phase 0 / #89): at collection, a worker's worktree (with its in-tree build artifacts, e.g. a Rust target/) is retained as a slot keyed by repo+issue instead of being removed, and a repeat dispatch of the same issue reuses that same path, reset with git clean -fdx -e target/. Measured basis: same-path reuse 64s vs 707-899s cold cargo check; a target copied to a different path reuses nothing, so slots are never copied or shared across paths or issues. Ships disabled; enabling and per-repo opt-in are separate operator decisions. max_slots_per_repo caps retained slots per repo (closed-issue slots evict first, then least-recently-used).",
+      "enabled": false,
+      "repos": [],
+      "max_slots_per_repo": 8
     }
   },
   "providers": {
