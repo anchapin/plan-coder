@@ -28,6 +28,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
 REPO = Path(__file__).resolve().parent.parent
 EDD = REPO / "bin" / "edd.py"
@@ -160,7 +161,7 @@ class TestDiscriminator(EddExperimentCase):
 
 class TestBackwardCompatibility(EddExperimentCase):
 
-    OLD_ROWS = [
+    OLD_ROWS: ClassVar[list[dict]] = [
         {"ts": "2026-11-01T10:00:00Z", "edit_summary": "old bundle",
          "evidence_run_ids": ["run-a"], "attribution": "split",
          "before": "not_available", "after": {"git": "abc"}},
