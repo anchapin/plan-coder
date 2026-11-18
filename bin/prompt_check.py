@@ -103,6 +103,8 @@ CLAUSES: dict[str, str] = {
     "flag_label": "{{operator.flag_label}}",
     "state_write_atomic": "state_write.py commit",
     "shepherd_ledger": "shepherd_ledger.py append",
+    "terminal_merge_packet_must": (
+        "never append a terminal merge row without the decision-time packet"),
     "trigger_cooldown": "{{shepherd.trigger_cooldown_minutes}}",
     "final_message_states": "MERGED-BY-SHEPHERD",
 }
