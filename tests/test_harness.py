@@ -451,7 +451,7 @@ class TestCliSurface(TreeCase):
         self.assertIn("worktree_slots.py lookup", sup)
         self.assertIn("worktree_slots.py record", sup)
         self.assertIn("worktree_slots.py evict", sup)
-        self.assertIn("git clean -fdx -e target/", sup)
+        self.assertIn("git clean -fdx -e target/ -e node_modules/ -e .venv/", sup)
         # FULL_CONFIG caps slots at 3 per repo; the token must render.
         self.assertIn("cap: 3 slots per repo", sup)
         self.assertNotIn("{{", sup)

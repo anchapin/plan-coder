@@ -117,15 +117,10 @@
       "enabled": false
     },
     "worktree_persistence": {
-      "_about": "Worktree persistence Phase 1 (plan-coder #87 Phase 0 / #89): at collection, a worker's worktree (with its in-tree build artifacts, e.g. a Rust target/) is retained as a slot keyed by repo+issue instead of being removed, and a repeat dispatch of the same issue reuses that same path, reset with git clean -fdx -e target/. Measured basis: same-path reuse 64s vs 707-899s cold cargo check; a target copied to a different path reuses nothing, so slots are never copied or shared across paths or issues. Ships disabled; enabling and per-repo opt-in are separate operator decisions. max_slots_per_repo caps retained slots per repo (closed-issue slots evict first, then least-recently-used).",
+      "_about": "Worktree persistence Phase 1 (plan-coder #87 Phase 0 / #89): at collection, a worker's worktree (with its in-tree build/dependency artifacts — target/, node_modules/, .venv/) is retained as a slot keyed by repo+issue instead of being removed, and a repeat dispatch of the same issue reuses that same path, reset with git clean -fdx -e target/ -e node_modules/ -e .venv/. Measured basis: same-path reuse 64s vs 707-899s cold cargo check (Phase 0) and 2.8-7.9s vs 571-596s first-cargo-step in the 2026-11-17 synthetic A/B; artifacts copied to a different path reuse nothing, so slots are never copied or shared across paths or issues. Ships disabled; enabling and per-repo opt-in are separate operator decisions. max_slots_per_repo caps retained slots per repo (closed-issue slots evict first, then least-recently-used).",
       "enabled": false,
       "repos": [],
       "max_slots_per_repo": 8
-    },
-    "edd": {
-      "_about": "EDD (experiment-difference discipline) parts for the harness: 'fingerprint' captures the harness fingerprint at dispatch and logs one tune-pass experiment row per edit bundle (edd_experiments.jsonl), 'regress' compares worker-ledger windows around a fingerprint change. Ships disabled; enabling is a separate operator decision. EDD output is visibility only: never a merge gate, never a dispatch gate. A bundle row carries a per-bundle 'discriminator' so two edits to the SAME template in one pass stay separable.",
-      "enabled": false,
-      "parts": ["fingerprint", "regress"]
     }
   },
   "providers": {
