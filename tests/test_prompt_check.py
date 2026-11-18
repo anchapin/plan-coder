@@ -79,9 +79,11 @@ class LivePromptTest(unittest.TestCase):
                                  "bin_paths_exist", "length_budget"})
 
     def test_spec_count_within_phase0_budget(self):
+        # The Phase 0 budget was 10 deterministic specs; the #130 build
+        # added two step-3b packet-MUST specs, raising the cap to 12.
         _, out = run_runner()
         self.assertGreaterEqual(out["spec_counts"]["deterministic"], 5)
-        self.assertLessEqual(out["spec_counts"]["deterministic"], 10)
+        self.assertLessEqual(out["spec_counts"]["deterministic"], 12)
 
     def test_model_judgement_spec_is_excluded_not_faked(self):
         _, out = run_runner()
@@ -93,7 +95,7 @@ class LivePromptTest(unittest.TestCase):
     def test_specs_file_is_json_and_names_the_prompt(self):
         doc = json.loads(SPECS.read_text(encoding="utf-8"))
         self.assertEqual(doc["prompt"], "prompts/pr-shepherd.md")
-        self.assertTrue(5 <= len(doc["specs"]) <= 10)
+        self.assertTrue(5 <= len(doc["specs"]) <= 12)
 
 
 class DeliberateRegressionTest(unittest.TestCase):

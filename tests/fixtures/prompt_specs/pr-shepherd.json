@@ -219,6 +219,58 @@
       "deterministic": true
     },
     {
+      "id": "terminal_merge_row_carries_packet",
+      "description": "A merge decision ends in a terminal merge row (merged / merged_by_shepherd): the step-3b MUST requires the decision-time packet (--ci, --merge-state, --head-sha, --ci-checks) on that row (issue #130).",
+      "input": {
+        "state": "open",
+        "mergeable": "MERGEABLE",
+        "merge_state_status": "CLEAN",
+        "head_branch": "worker/issue-130",
+        "head_sha_stale": false,
+        "diff_reviewed": true,
+        "flag_raised": false,
+        "jittest_catch": false,
+        "test_tamper_flag": false,
+        "touches_workflows": false,
+        "domain_judgment": false,
+        "unverifiable": false,
+        "ci": "green",
+        "ci_failures": []
+      },
+      "expected_decision": "merge",
+      "required_clauses": [
+        "terminal_merge_packet_must",
+        "merge_command"
+      ],
+      "deterministic": true
+    },
+    {
+      "id": "observed_merge_row_carries_packet",
+      "description": "An UNSTABLE merge exempted only by the known-failure list is a terminal merge row too: the step-3b packet MUST applies to observed merges (action merged) exactly as to shepherd merges (issue #130, meeting #121).",
+      "input": {
+        "state": "open",
+        "mergeable": "MERGEABLE",
+        "merge_state_status": "UNSTABLE",
+        "head_branch": "worker/issue-130",
+        "head_sha_stale": false,
+        "diff_reviewed": true,
+        "flag_raised": false,
+        "jittest_catch": false,
+        "test_tamper_flag": false,
+        "touches_workflows": false,
+        "domain_judgment": false,
+        "unverifiable": false,
+        "ci": "green",
+        "ci_failures": [{"scope": "pre_existing_tracked", "name": "develop-wide lint drift"}]
+      },
+      "expected_decision": "merge",
+      "required_clauses": [
+        "terminal_merge_packet_must",
+        "known_failure_exemption"
+      ],
+      "deterministic": true
+    },
+    {
       "id": "diff_scope_judgement",
       "description": "Is a 400-line refactor 'a well-scoped change with clear intent'? The prompt sets the bar in prose; no mechanical assertion can decide it.",
       "input": {
