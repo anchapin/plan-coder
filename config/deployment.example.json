@@ -83,6 +83,11 @@
       "enabled": false,
       "repos": [],
       "max_slots_per_repo": 8
+    },
+    "edd": {
+      "_about": "EDD (experiment-difference discipline) parts for the harness: 'fingerprint' captures the harness fingerprint at dispatch and logs one tune-pass experiment row per edit bundle (edd_experiments.jsonl), 'regress' compares worker-ledger windows around a fingerprint change. Ships disabled; enabling is a separate operator decision. EDD output is visibility only: never a merge gate, never a dispatch gate. A bundle row carries a per-bundle 'discriminator' so two edits to the SAME template in one pass stay separable.",
+      "enabled": false,
+      "parts": ["fingerprint", "regress"]
     }
   },
   "providers": {
