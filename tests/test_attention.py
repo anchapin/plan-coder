@@ -46,12 +46,12 @@ UNTIL = datetime(2026, 11, 18, 13, 29, 9, tzinfo=UTC)
 def worker(repo, issue, ts, pr=None, outcome="pr_opened"):
     row = {"ts": ts, "repo": repo, "issue": issue, "outcome": outcome, "pr_url": ""}
     if pr is not None:
-        row["pr_url"] = f"https://github.com/anchapin/{repo}/pull/{pr}"
+        row["pr_url"] = f"https://github.com/example/{repo}/pull/{pr}"
     return row
 
 
 def shepherd(repo, pr, action, ts):
-    return {"ts": ts, "repo": f"anchapin/{repo}", "pr": pr, "action": action}
+    return {"ts": ts, "repo": f"example/{repo}", "pr": pr, "action": action}
 
 
 def iso(stamp):
@@ -258,19 +258,19 @@ class TestCensoringLabel(unittest.TestCase):
 # (repo, issue, runs, prs, kind) with kind merged / open / failed.
 PHASE0_TASKS = [
     ("portkit-v2", 282, 2, [459], "merged"),
-    ("planar-nexus", 2948, 2, [], "failed"),
+    ("repo-p", 2948, 2, [], "failed"),
     ("portkit-v2", 302, 1, [458], "merged"),
     ("plan-coder", 72, 1, [75], "merged"),
     ("plan-coder", 73, 1, [76], "merged"),
     ("plan-coder", 74, 1, [77], "open"),
-    ("planar-nexus", 2976, 1, [], "failed"),
-    ("planar-nexus", 2975, 1, [2979], "merged"),
-    ("planar-nexus", 2978, 1, [2980], "merged"),
+    ("repo-p", 2976, 1, [], "failed"),
+    ("repo-p", 2975, 1, [2979], "merged"),
+    ("repo-p", 2978, 1, [2980], "merged"),
     ("passive-income-pocs", 1, 1, [4], "open"),
     ("portkit-v2", 299, 2, [460, 462], "merged"),
     ("plan-coder", 86, 2, [92], "merged"),
     ("passive-income-pocs", 2, 1, [5], "merged"),
-    ("matchline", 1409, 1, [1410], "open"),
+    ("repo-m", 1409, 1, [1410], "open"),
     ("passive-income-pocs", 3, 1, [6], "open"),
     ("portkit-v2", 287, 3, [], "failed"),
     ("plan-coder", 80, 1, [111], "merged"),
@@ -280,9 +280,9 @@ PHASE0_TASKS = [
     ("home-energy-twin", 4, 1, [20], "merged"),
     ("home-energy-twin", 3, 2, [22], "merged"),
     ("home-energy-twin", 7, 1, [21], "merged"),
-    ("planar-nexus", 2419, 1, [2981], "merged"),
-    ("planar-nexus", 2411, 1, [2983], "open"),
-    ("planar-nexus", 2984, 1, [2985], "open"),
+    ("repo-p", 2419, 1, [2981], "merged"),
+    ("repo-p", 2411, 1, [2983], "open"),
+    ("repo-p", 2984, 1, [2985], "open"),
     ("home-energy-twin", 8, 1, [23], "merged"),
     ("portkit-v2", 463, 1, [466], "merged"),
 ]
@@ -301,7 +301,7 @@ PHASE0_FLAGS = {
 PHASE0_FLAG_REPO = {
     77: "plan-coder",
     4: "passive-income-pocs",
-    1410: "matchline",
+    1410: "repo-m",
     75: "plan-coder",
     76: "plan-coder",
 }
@@ -336,7 +336,7 @@ def phase0_ledgers():
     # A non-unit row in cycle 10 keeps that cycle present in the
     # grouping, so PR 77's cycle 9 and cycle 11 flags stay separate
     # episodes, exactly as in the live ledger.
-    shepherds.append(shepherd("planar-nexus", 2985, "other", iso(cycle_stamp(10))))
+    shepherds.append(shepherd("repo-p", 2985, "other", iso(cycle_stamp(10))))
     merged_block = datetime(2026, 11, 18, 10, 0, tzinfo=UTC)
     tick = 0
     for repo, issue, runs, prs, kind in PHASE0_TASKS:
@@ -372,7 +372,7 @@ class TestPhase0Regression(unittest.TestCase):
         self.assertEqual(apcf["p90"], 1)
         top = {t["task"]: t["flag_presentations"] for t in summary["top_flag_presentations"]}
         self.assertEqual(top.get("plan-coder#74"), 9)
-        self.assertEqual(top.get("matchline#1409"), 7)
+        self.assertEqual(top.get("repo-m#1409"), 7)
         self.assertEqual(top.get("passive-income-pocs#1"), 7)
 
 
