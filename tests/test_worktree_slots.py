@@ -180,6 +180,22 @@ class EvictionCase(unittest.TestCase):
         self.assertFalse(wt2.exists())
         self.assertTrue(wt1.exists())
 
+    def test_full_slot_lifecycle(self):
+        """record at collection -> lookup finds it at re-dispatch ->
+        issue closes -> evict removes the worktree -> lookup misses."""
+        wt = self.add_slot(5)
+        r = self.run_cli("lookup", "--repo", "alpha", "--issue", "5",
+                         "--json")
+        self.assertTrue(json.loads(r.stdout)["found"])
+        r = self.run_cli("evict", "--repo", "alpha", "--clone",
+                         str(self.clone), "--closed-issues", "5",
+                         "--json")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertFalse(wt.exists())
+        r = self.run_cli("lookup", "--repo", "alpha", "--issue", "5",
+                         "--json")
+        self.assertFalse(json.loads(r.stdout)["found"])
+
     def test_evict_disabled_exits_2(self):
         cfg = make_config(self.tmp, enabled=False)
         env = dict(os.environ)
