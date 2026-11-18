@@ -1,0 +1,20 @@
+pr,mergedAt,judging_files,shepherd_needs_alex,title
+fluxion#4836,2026-11-18T00:24:59Z,deny.toml,False,chore(deps): advisory drift — libz-sys lock bump (RUSTSEC-2026-0544) + dated ignore pair (RUSTSEC-2026-0543)
+fluxion#4769,2026-11-12T07:54:16Z,scripts/check_cli_doc_stubs.py,False,"cli: remove dead #2947 tracking citations from stubs, errors, and docs gate (#4757)"
+fluxion#4747,2026-11-11T19:22:52Z,scripts/memory-budget-gate.sh,False,fix(scripts): remove bc dependency from memory-budget-gate.sh (Closes #4745)
+fluxion#4606,2026-10-25T19:20:46Z,scripts/check_results_report_drift.py,False,feat(report): versioned standard results report v1 (#4104)
+fluxion#4562,2026-10-23T09:20:39Z,scripts/release_gate_checker.py,False,feat(validation): per-case ASHRAE 140 conformance checklist in release gate report (#4277)
+fluxion#4257,2026-09-29T17:25:50Z,scripts/check_scorecard_data_sources_consistent.py,False,docs(ci): refresh README ASHRAE 140 metrics + guard README headline in scorecard-consistency gate (Closes #4183)
+fluxion#4256,2026-09-29T17:25:06Z,scripts/check_gate_inventory_sync.py,False,docs(ci): fix AGENTS.md gate-inventory claims and add gate-inventory sync gate (Closes #4181)
+fluxion#4244,2026-09-29T16:12:35Z,scripts/check_thermal_selector_default_claim.py,False,docs: correct README thermal-selector default claim to ADR-0017 + anti-drift gate (Closes #4160)
+fluxion#4235,2026-09-29T11:16:20Z,scripts/check_doc_link_integrity.py; scripts/check_required_checks_sync.py,False,docs(ci): repoint strict-energy-gate citations at physics-pr.yml (Closes #4184)
+fluxion#4230,2026-09-29T04:33:33Z,scripts/check_doc_drift.py; scripts/check_stub_modules.py,False,Stub-gate drift: negation-aware matching and doc verification (closes #4198)
+fluxion#4225,2026-09-29T00:01:28Z,scripts/check_doc_link_integrity.py; scripts/check_docker_base_image_msrv.py; scripts/check_docker_workspace_members.py,False,docs: rewrite consolidated-test commands after #3764 all_tests merge (Closes #4199)
+matchline#1408,2026-11-18T02:32:21Z,bem/export_gate.py,False,"feat(bem-export): deterministic repair loop for staged exports, OFF by default (Closes #1407)"
+matchline#1405,2026-11-15T04:44:04Z,bem/export_gate.py; tests/test_export_gate.py,False,feat(bem-export): publish-nothing export gate + checksummed export manifest (Closes #1404)
+matchline#525,2026-09-29T12:01:26Z,detector/check_dataset.py,False,ci(detector): add detector-lint job running ruff on detector/ (Closes #507)
+plan-coder#13,2026-11-13T18:13:10Z,ruff.toml,True,ci: pytest + ruff workflow so plan-coder PRs get a check signal (Closes #4)
+staging-studio#1456,2026-10-24T07:49:59Z,src/lib/edit-conservation-gate.ts; tests/edit-conservation-gate.test.ts,False,feat(qa): wire ABACUS edit-conservation gate into the inpaint QA path (#1446)
+staging-studio#1164,2026-09-29T01:30:28Z,eslint.config.mjs,False,chore(deps): bump eslint-config-next to ^16.3.5
+building-ai-pocs#66,2026-11-15T02:57:18Z,address-to-bem-roofer/scripts/coverage_gate.py,False,"poc(roofer): Phase 0 coverage gate + route outcome — Blocked (environment), gate not certified (Refs #65)"
+building-ai-pocs#62,2026-11-14T12:54:37Z,xias-ui-gates/lens_gates.py; xias-ui-gates/test_lens_gates.py,False,POC #46 lens surface: gates 1-4 measured on the diagnostic-lens HTML (Refs #46)
