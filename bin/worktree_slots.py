@@ -12,6 +12,12 @@ at the SAME path and advancing the base cost 64 s vs 707-899 s cold
 nothing (335/335 units re-checked): cargo's fingerprints are
 path-bound, so this tool never copies, moves, or shares a target
 across paths. The only mechanism here is same-path slot reuse.
+Widened beyond cargo 2026-11-17 (Alex's tap, after the fluxion A/B):
+the preserved set is the build/dependency artifact dirs PRESERVE_DIRS
+(target/, node_modules/, .venv/) — the supervisor's reuse reset
+excludes exactly those from `git clean -fdx`, and each stack's own
+sync step (cargo fingerprints, npm, uv) reconciles what a base
+advance made stale.
 
 This script is the mechanical half (goldfish.py is the model): it
 keeps the slot registry (which (repo, issue) has a retained worktree,
@@ -30,7 +36,7 @@ prompts/backlog-supervisor.md) drives it:
   record   At collection (after grading), retain the worker's
            worktree as the slot for (repo, issue) instead of removing
            it. Records the base sha it was cut from and the size of
-           its target/ dir.
+           its preserved artifact dirs.
   evict    Enforce max_slots_per_repo for a repo: slots for closed
            issues evict first, then least-recently-used. Eviction is
            the only deletion path and it uses the same
@@ -139,15 +145,18 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _target_bytes(worktree: str) -> int:
-    target = os.path.join(worktree, "target")
+PRESERVE_DIRS = ("target", "node_modules", ".venv")
+
+
+def _artifact_bytes(worktree: str) -> int:
     total = 0
-    for root, _dirs, files in os.walk(target):
-        for name in files:
-            try:
-                total += os.path.getsize(os.path.join(root, name))
-            except OSError:
-                continue
+    for dirname in PRESERVE_DIRS:
+        for root, _dirs, files in os.walk(os.path.join(worktree, dirname)):
+            for name in files:
+                try:
+                    total += os.path.getsize(os.path.join(root, name))
+                except OSError:
+                    continue
     return total
 
 
@@ -213,7 +222,7 @@ def cmd_record(args, pol, state_path) -> int:
     slot.update({
         "worktree": args.worktree,
         "base_sha": args.base_sha,
-        "target_bytes": _target_bytes(args.worktree),
+        "artifact_bytes": _artifact_bytes(args.worktree),
         "recorded_ts": now,
         "last_used_ts": now,
     })
@@ -222,7 +231,7 @@ def cmd_record(args, pol, state_path) -> int:
         print(json.dumps(slot))
     else:
         print(f"slot recorded: {args.repo}#{args.issue} "
-              f"{args.worktree} target={slot['target_bytes']}B")
+              f"{args.worktree} artifacts={slot['artifact_bytes']}B")
     return 0
 
 
