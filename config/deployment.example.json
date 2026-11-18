@@ -88,6 +88,10 @@
       "_about": "EDD (experiment-difference discipline) parts for the harness: 'fingerprint' captures the harness fingerprint at dispatch and logs one tune-pass experiment row per edit bundle (edd_experiments.jsonl), 'regress' compares worker-ledger windows around a fingerprint change. Ships disabled; enabling is a separate operator decision. EDD output is visibility only: never a merge gate, never a dispatch gate. A bundle row carries a per-bundle 'discriminator' so two edits to the SAME template in one pass stay separable.",
       "enabled": false,
       "parts": ["fingerprint", "regress"]
+    },
+    "flagbatch": {
+      "_about": "Batched flag view spike (feedback-surface flag review, Phase 1): bin/flagbatch.py renders a standalone FLAG_BATCH.md in the state dir at the end of each shepherd cycle — one deduplicated line per flagged PR, grouped by flag class (the flag-resolution verifier's class names), with repeat counts from the shepherd ledger, plus a counts-only flag_batch_ledger.jsonl for tune-pass reporting. Presentation only: never clears a flag, never a merge/dispatch/tune input. Ships disabled; enabling is a separate operator decision, after a 100% audit of the generated view against shepherd.json, the ledger, and live PR state.",
+      "enabled": false
     }
   },
   "providers": {
