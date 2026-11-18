@@ -1,0 +1,101 @@
+run_id,repo,issue,outcome,ts,class,evidence,clean_base,test_segments,max_passed
+portkit-v2-439-1794611191,portkit-v2,439,failed:worker-error,2026-11-13T23:30:00Z,A-NONE,,no,0,
+matchline-1397-1794610949,matchline,1397,push_queued:desktop,2026-11-13T23:36:00Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -25,yes,14,154
+retrofit-copilot-11-1794613424,retrofit-copilot,11,pr_opened,2026-11-14T00:09:07Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -20,yes,3,100
+armored-archer-1849-1794613424,armored-archer,1849,pr_opened,2026-11-14T00:10:21Z,A-NONE,,no,0,
+plan-coder-35-1794613424,plan-coder,35,pr_opened,2026-11-14T00:12:18Z,A-SUITE,python3 -m pytest --version,no,14,160
+building-ai-pocs-54-1794613424,building-ai-pocs,54,failed:bad-diff,2026-11-14T00:15:48Z,A-SUITE,node --test tests/ 2>&1 | tail -30,no,2,
+portkit-v2-439-1794613663,portkit-v2,439,failed:worker-error,2026-11-14T00:15:48Z,A-NONE,,no,0,
+staging-studio-1547-1794613663,staging-studio,1547,pr_opened,2026-11-14T00:21:58Z,A-SUITE,npm test 2>&1 | tail -30,yes,7,3306
+planar-nexus-2967-1794616245,planar-nexus,2967,pr_opened,2026-11-14T00:50:30Z,A-SUITE,"npx jest --listTests 2>/dev/null | grep -i ""split""",yes,8,15158
+matchline-1398-1794613424,matchline,1398,pr_opened,2026-11-14T00:54:24Z,A-NONE,,no,0,
+staging-studio-1546-1794618442,staging-studio,1546,pr_opened,2026-11-14T01:17:00Z,A-SUITE,npm test 2>&1 | tail -60,yes,6,16
+armored-archer-1850-1794618457,armored-archer,1850,pr_opened,2026-11-14T01:17:00Z,A-NONE,,no,0,
+retrofit-copilot-12-1794618467,retrofit-copilot,12,pr_opened,2026-11-14T01:20:00Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -20,yes,8,118
+portkit-v2-439-1794618750,portkit-v2,439,pr_opened,2026-11-14T01:35:00Z,A-SUITE,python3 -m pytest tests/ -q,no,6,96
+plan-coder-34-1794618462,plan-coder,34,pr_opened,2026-11-14T01:35:00Z,A-NONE,,no,0,
+planar-nexus-2965-1794618452,planar-nexus,2965,failed:worker-error,2026-11-14T01:35:00Z,A-NONE,,no,0,
+matchline-1396-1794618447,matchline,1396,pr_opened,2026-11-14T01:45:00Z,A-NONE,,no,0,
+armored-archer-1848-1794620942,armored-archer,1848,pr_opened,2026-11-14T01:55:33Z,A-NONE,,no,0,
+retrofit-copilot-10-1794621260,retrofit-copilot,10,pr_opened,2026-11-14T02:04:29Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -15,yes,6,128
+portkit-v2-438-1794621064,portkit-v2,438,pr_opened,2026-11-14T02:06:17Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -15,yes,5,21
+plan-coder-38-1794621184,plan-coder,38,pr_opened,2026-11-14T02:07:55Z,A-TARGETED,python3 -m pytest tests/test_trajectory_coupling_phase0.py -q 2>&1 | tail -25,no,1,21
+retrofit-copilot-13-1794623737,retrofit-copilot,13,pr_opened,2026-11-14T02:38:57Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -15,no,2,128
+plan-coder-24-1794623737,plan-coder,24,pr_opened,2026-11-14T02:47:54Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -5,no,1,160
+planar-nexus-2965-1794623737,planar-nexus,2965,pr_opened,2026-11-14T03:08:04Z,A-SUITE,npm test -- --testPathPattern=keyword-explore 2>&1 | tail -60,yes,4,15159
+building-ai-pocs-56-1794626301,building-ai-pocs,56,pr_opened,2026-11-14T03:25:00Z,A-SUITE,python3 -m pytest --version,no,4,43
+retrofit-copilot-5-1794626178,retrofit-copilot,5,pr_opened,2026-11-14T03:32:00Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -20,yes,10,135
+retrofit-copilot-6-1794627147,retrofit-copilot,6,pr_opened,2026-11-14T03:37:38Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -5,no,5,156
+building-ai-pocs-57-1794627254,building-ai-pocs,57,pr_opened,2026-11-14T03:48:20Z,A-SUITE,python3 -m pytest --version,no,5,20
+portkit-v2-442-1794630817,portkit-v2,442,pr_opened,2026-11-14T04:44:35Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -30,yes,7,3667
+retrofit-copilot-7-1794630817,retrofit-copilot,7,pr_opened,2026-11-14T04:45:49Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -30,no,5,165
+plan-coder-42-1794630817,plan-coder,42,pr_opened,2026-11-14T04:55:21Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -5,no,1,
+building-ai-pocs-54-1794630817,building-ai-pocs,54,pr_opened,2026-11-14T05:30:00Z,A-TARGETED,npx playwright test tests/e2e/specs/xias-ui-gates.spec.ts --list 2>&1 | tail -20,no,3,
+retrofit-copilot-1-1794634175,retrofit-copilot,1,failed:push-workflow-scope,2026-11-14T05:33:58Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -20,no,3,165
+plan-coder-28-1794634175,plan-coder,28,pr_opened,2026-11-14T05:45:08Z,A-NONE,,no,0,
+plan-coder-21-1794636400,plan-coder,21,pr_opened,2026-11-14T06:27:27Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -5,no,2,182
+building-ai-pocs-50-1794636900,building-ai-pocs,50,pr_opened,2026-11-14T06:33:09Z,A-NONE,,no,0,28
+plan-coder-22-1794638490,plan-coder,22,pr_opened,2026-11-14T06:50:00Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -15,no,6,203
+plan-coder-5-1794639685,plan-coder,5,pr_opened,2026-11-14T07:08:00Z,A-SUITE,python3 -m pytest --version,no,5,191
+plan-coder-29-1794645863,plan-coder,29,pr_opened,2026-11-14T09:00:00Z,A-NONE,,no,0,
+building-ai-pocs-46-1794653141,building-ai-pocs,46,failed:test-env,2026-11-14T10:55:24Z,A-NONE,,no,0,
+building-ai-pocs-46-1794660445,building-ai-pocs,46,pr_opened,2026-11-14T12:52:33Z,A-SUITE,python3 -m pytest xias-ui-gates/ -q 2>&1 | tail -30,no,6,100
+plan-coder-22-1794661730,plan-coder,22,failed:worker-error,2026-11-14T13:22:50Z,A-NONE,,no,0,
+plan-coder-22-1794667668,plan-coder,22,pr_opened,2026-11-14T15:00:30Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -8,no,5,229
+building-ai-pocs-38-1794674757,building-ai-pocs,38,pr_opened,2026-11-14T16:56:20Z,A-SUITE,python3 -m pytest --version,no,2,
+portkit-v2-288-1794674643,portkit-v2,288,pr_opened,2026-11-14T17:13:07Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -5,no,1,
+plan-coder-18-1794677617,plan-coder,18,pr_opened,2026-11-14T17:42:34Z,A-SUITE,python3 -m pytest --version,yes,6,231
+portkit-v2-287-1794681587,portkit-v2,287,failed:empty-diff,2026-11-14T18:48:13Z,A-NONE,,no,0,
+portkit-v2-288-1794682683,portkit-v2,288,pr_opened,2026-11-14T19:35:00Z,A-TARGETED,python3 -m pytest tests/test_animated_textures.py tests/test_connected_textures.py -q 2>&1 | tail -30,no,3,34
+portkit-v2-283-1794685861,portkit-v2,283,failed:empty-diff,2026-11-14T20:02:22Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -5,yes,5,3685
+portkit-v2-288-1794689132,portkit-v2,288,failed:empty-diff,2026-11-14T20:52:29Z,A-NONE,,no,0,3341
+plan-coder-52-1794696263,plan-coder,52,pr_opened,2026-11-14T22:53:00Z,A-SUITE,python3 -m pytest --version 2>&1 | head -3,no,2,
+portkit-v2-288-1794696374,portkit-v2,288,failed:worker-error,2026-11-14T22:57:00Z,A-NONE,,no,0,3341
+armored-archer-1860-1794703434,armored-archer,1860,pr_opened,2026-11-15T00:55:04.218702+00:00,A-SUITE,python3 -m unittest discover -s scripts/tests -p 'test_capture_visual_evidence.py' -v 2>&1 | tail -25,no,4,
+portkit-v2-288-1794703434,portkit-v2,288,pr_opened,2026-11-15T00:56:35.258652+00:00,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -20,yes,5,3687
+plan-coder-55-1794703434,plan-coder,55,pr_opened,2026-11-15T00:57:36.201547+00:00,A-SUITE,python3 -m pytest --version,yes,9,248
+armored-archer-1861-1794706953,armored-archer,1861,pr_opened,2026-11-15T01:50:11Z,A-NONE,,no,0,
+portkit-v2-289-1794707079,portkit-v2,289,failed:empty-diff,2026-11-15T01:50:58Z,A-NONE,,no,0,3687
+plan-coder-59-1794707579,plan-coder,59,pr_opened,2026-11-15T02:01:20Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -15,no,12,267
+plan-coder-56-1794709992,plan-coder,56,pr_opened,2026-11-15T02:44:43Z,A-TARGETED,python3 -m pytest tests/test_deliverable_check.py -q 2>&1 | tail -30,no,2,15
+matchline-1402-1794709982,matchline,1402,pr_opened,2026-11-15T02:44:43Z,A-SUITE,python3 -m pytest --version 2>&1|head -2,no,2,130
+portkit-v2-289-1794710477,portkit-v2,289,pr_opened,2026-11-15T02:51:12Z,A-SUITE,python3 -m pytest --version 2>&1 | tail -2,yes,8,19
+building-ai-pocs-65-1794709987,building-ai-pocs,65,pr_opened,2026-11-15T02:53:47Z,A-NONE,,no,0,
+plan-coder-54-1794712306,plan-coder,54,pr_opened,2026-11-15T03:18:47Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -5,no,3,282
+matchline-1404-1794712554,matchline,1404,failed:incomplete-diff,2026-11-15T03:24:30Z,A-TARGETED,"python3 -m pytest tests/test_export_gate.py -x -q -k ""not corpus"" 2>&1 | tail -30",no,1,
+plan-coder-60-1794715358,plan-coder,60,pr_opened,2026-11-15T04:10:20Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -5,no,4,304
+matchline-1404-1794715637,matchline,1404,pr_opened,2026-11-15T04:31:14Z,A-SUITE,python3 -m pytest tests/ --collect-only -q 2>&1 | tail -3,yes,6,
+portkit-v2-235-1794718888,portkit-v2,235,pr_opened,2026-11-15T05:19:25Z,A-TARGETED,python3 -m pytest tests/test_name_mappings.py -q 2>&1 | tail -20,no,2,24
+portkit-v2-236-1794725479,portkit-v2,236,pr_opened,2026-11-15T07:15:11Z,A-TARGETED,python3 -m pytest tests/test_vanilla_parents.py -q 2>&1 | tail -20,yes,2,3692
+portkit-v2-288-1794732264,portkit-v2,288,pr_opened,2026-11-15T08:58:00Z,A-TARGETED,python3 -m pytest tests/test_chisel_variations.py -q 2>&1 | tail -30,no,4,8
+portkit-v2-287-1794739657,portkit-v2,287,failed:empty-diff,2026-11-15T10:56:57Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -5,no,1,3698
+portkit-v2-237-1794749945,portkit-v2,237,failed:cap-incomplete,2026-11-15T13:45:53Z,A-NONE,,no,0,
+portkit-v2-237-1794754701,portkit-v2,237,failed:provider-abort,2026-11-15T15:12:35Z,A-NONE,,no,0,
+portkit-v2-237-1794761926,portkit-v2,237,pr_opened,2026-11-15T17:22:00Z,A-SUITE,python3 -m pytest tests/ -q,yes,8,23
+portkit-v2-283-1794764245,portkit-v2,283,failed:empty-diff,2026-11-15T17:42:07Z,A-NONE,,no,0,
+portkit-v2-283-1794764814,portkit-v2,283,pr_opened,2026-11-15T18:05:00Z,A-SUITE,python3 -m pytest tests/ -q,yes,11,56
+portkit-v2-286-1794767637,portkit-v2,286,failed:empty-diff,2026-11-15T18:39:25Z,A-NONE,,no,0,
+portkit-v2-284-1794782798,portkit-v2,284,failed:worker-error,2026-11-15T23:00:37Z,A-NONE,,no,0,
+portkit-v2-284-1794833408,portkit-v2,284,pr_opened,2026-11-16T13:11:45Z,A-SUITE,python3 -m pytest tests/ -q -x --timeout=600 2>&1 | tail -20,yes,9,3721
+portkit-v2-285-1794854732,portkit-v2,285,pr_opened,2026-11-16T18:54:41Z,A-SUITE,python3 -m pytest tests/adapters/immersiveengineering/ -q 2>&1 | tail -30,yes,10,3734
+portkit-v2-286-1794857749,portkit-v2,286,pr_opened,2026-11-16T19:40:00Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -30,yes,6,47
+portkit-v2-299-1794861638,portkit-v2,299,failed:runtime-restart,2026-11-16T21:02:00Z,A-NONE,,no,0,
+portkit-v2-299-1794862904,portkit-v2,299,pr_opened,2026-11-16T21:08:00Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -20,yes,7,3752
+plan-coder-66-1794906532,plan-coder,66,pr_opened,2026-11-17T09:19:32Z,A-NONE,,no,0,
+portkit-v2-302-1794912102,portkit-v2,302,pr_opened,2026-11-17T11:01:22Z,A-SUITE,python3 -m pytest tests/ -q -x 2>&1 | tail -15,yes,10,3756
+portkit-v2-282-1794914828,portkit-v2,282,failed:provider-abort,2026-11-17T11:41:00Z,A-TARGETED,python3 -m pytest tests/test_lang_keys.py -q 2>&1 | tail -5,no,1,16
+planar-e2e-rootcause-20261117,planar-nexus,2948,failed:hit-cap,2026-11-17T13:43:52.981591+00:00,A-TARGETED,npx playwright --version,no,1,
+planar-e2e-fix2-20261117,planar-nexus,2948,failed:hit-cap,2026-11-17T14:57:28.560493+00:00,A-NONE,,no,0,
+portkit-v2-302-1794929526,portkit-v2,302,pr_opened,2026-11-17T16:04:00Z,A-SUITE,python3 -m pytest --version,yes,1,
+plan-coder-72-1794933150,plan-coder,72,pr_opened,2026-11-17T16:40:05Z,A-SUITE,python3 -m pytest --version,no,4,336
+portkit-v2-282-1794933477,portkit-v2,282,pr_opened,2026-11-17T16:51:52Z,A-SUITE,python3 -m pytest tests/ -q -x 2>&1 | tail -20,yes,6,69
+plan-coder-73-1794934787,plan-coder,73,pr_opened,2026-11-17T17:06:00Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -20,no,8,349
+plan-coder-74-1794941132,plan-coder,74,pr_opened,2026-11-17T18:50:50.940496+00:00,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -15,yes,4,359
+planar-nexus-2976-1794941014,planar-nexus,2976,failed:bad-diff,2026-11-17T18:57:15.376471+00:00,A-NONE,,no,0,
+planar-nexus-2975-1794955418,planar-nexus,2975,pr_opened,2026-11-17T23:15:19.093610+00:00,A-TARGETED,npx tsc --noEmit 2>&1 | tail -20,yes,0,15150
+planar-nexus-2978-1794960384,planar-nexus,2978,pr_opened,2026-11-18T01:05:00Z,A-SUITE,npx jest src/lib/__tests__/replay-share-link --ci 2>&1 | tail -30,no,11,36
+passive-income-pocs-1-1794966384,passive-income-pocs,1,pr_opened,2026-11-18T02:02:12Z,A-NONE,,no,0,
+portkit-v2-299-1794966098,portkit-v2,299,pr_opened,2026-11-18T02:05:19Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -15,yes,8,142
+plan-coder-86-1794966247,plan-coder,86,failed:premise-conflict,2026-11-18T02:07:12Z,A-SUITE,python3 -m pytest --version,no,6,359
+plan-coder-86-1794969743,plan-coder,86,pr_opened,2026-11-18T03:00:58Z,A-SUITE,python3 -m pytest tests/ -q 2>&1 | tail -5,no,4,91
+passive-income-pocs-2-1794969695,passive-income-pocs,2,pr_opened,2026-11-18T03:09:48Z,A-NONE,,no,0,
