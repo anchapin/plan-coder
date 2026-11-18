@@ -51,7 +51,10 @@ FULL_CONFIG = {
                             "max_tokens_out_test": 30000,
                             "max_steps": 25, "max_files": 5,
                             "max_diff_lines": 300,
-                            "max_three_state_runs": 3}},
+                            "max_three_state_runs": 3},
+                "worktree_persistence": {"enabled": True,
+                                         "repos": ["alpha"],
+                                         "max_slots_per_repo": 3}},
     "providers": {
         "zai": {"env_key": "ZAI_API_KEY", "credential": "custom.zai"},
         "minimax": {"env_key": "MINIMAX_API_KEY",
@@ -435,6 +438,20 @@ class TestCliSurface(TreeCase):
         self.assertIn("jittest:catch", shep)
         self.assertIn("NOT merge-eligible", shep)
         self.assertNotIn("{{", shep)
+
+    def test_render_has_worktree_persistence_wiring(self):
+        out = self.tmp / "out-wt-persistence"
+        r = self.run_bin("render_prompts.py", "--out", str(out))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        sup = (out / "backlog-supervisor.rendered.md").read_text()
+        self.assertIn("worktree_slots.py check", sup)
+        self.assertIn("worktree_slots.py lookup", sup)
+        self.assertIn("worktree_slots.py record", sup)
+        self.assertIn("worktree_slots.py evict", sup)
+        self.assertIn("git clean -fdx -e target/", sup)
+        # FULL_CONFIG caps slots at 3 per repo; the token must render.
+        self.assertIn("cap: 3 slots per repo", sup)
+        self.assertNotIn("{{", sup)
 
     def test_render_has_spike_ledger_tune_wiring(self):
         out = self.tmp / "out-tune-ledgers"
