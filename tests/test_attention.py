@@ -384,7 +384,7 @@ class TestCliContract(unittest.TestCase):
             proc = subprocess.run(
                 [sys.executable, str(ROOT / "bin" / "attention.py"), "summary",
                  "--since", "2026-11-17", "--state-dir", tmp, "--json"],
-                capture_output=True, text=True,
+                check=False, capture_output=True, text=True,
             )
         self.assertEqual(proc.returncode, 2)
 
