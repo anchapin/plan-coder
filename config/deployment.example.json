@@ -92,6 +92,10 @@
     "verification_stamp": {
       "_about": "Verification stamp spike (issue #95, from #94 Part A): at supervisor collection, bin/verify_stamp.py classifies what a run actually verified (E2E/SUITE/TARGETED/NONE) from its transcript with the Phase 0 segment-anchored classifier and appends a stamp row (verify class, worker vs collection commands, clean_base_verified yes|no|not_claimed) to verification_ledger.jsonl in the state dir. OBSERVE-ONLY: nothing reads the stamp to gate, block, flag or grade anything. Ships disabled; enabling is a separate operator decision.",
       "enabled": false
+    },
+    "flagbatch": {
+      "_about": "Batched flag view spike (feedback-surface flag review, Phase 1): bin/flagbatch.py renders a standalone FLAG_BATCH.md in the state dir at the end of each shepherd cycle — one deduplicated line per flagged PR, grouped by flag class (the flag-resolution verifier's class names), with repeat counts from the shepherd ledger, plus a counts-only flag_batch_ledger.jsonl for tune-pass reporting. Presentation only: never clears a flag, never a merge/dispatch/tune input. Ships disabled; enabling is a separate operator decision, after a 100% audit of the generated view against shepherd.json, the ledger, and live PR state.",
+      "enabled": false
     }
   },
   "providers": {
