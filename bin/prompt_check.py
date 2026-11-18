@@ -49,6 +49,7 @@ keep/revert demonstration switch: it never writes to the prompt file.
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import re
@@ -64,6 +65,30 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(os.path.abspath(__f
 DEFAULT_PROMPT = os.path.join("prompts", "pr-shepherd.md")
 DEFAULT_SPECS = os.path.join("tests", "fixtures", "prompt_specs",
                              "pr-shepherd.json")
+
+# Issue #119 uses the smaller-shape fallback: the shepherd profile stays
+# here, while the other two live prompts have self-contained profile modules.
+# The dispatcher recognises the live prompt filename, so every profile has
+# the same command-line contract as the Phase 0 runner.
+PROFILE_MODULES = {
+    "backlog-supervisor.md": "prompt_check_supervisor",
+    "harness-tune.md": "prompt_check_harness_tune",
+}
+
+
+def profile_for_prompt(prompt_path: str) -> str:
+    """Return the profile name for a prompt path (``pr-shepherd`` default)."""
+    return PROFILE_MODULES.get(os.path.basename(prompt_path), "pr-shepherd")
+
+
+def profile_module_for_prompt(prompt_path: str):
+    """Import and return a non-shepherd profile module, or None."""
+    module_name = PROFILE_MODULES.get(os.path.basename(prompt_path))
+    if module_name is None:
+        return None
+    if __package__:
+        return importlib.import_module("." + module_name, __package__)
+    return importlib.import_module(module_name)
 
 # ---------------------------------------------------------------------------
 # Clause catalogue.
@@ -156,7 +181,19 @@ LENGTH_MIN = 3000
 LENGTH_MAX = 20000
 STEP_MIN = 4
 STEP_MAX = 12
-STEP_MAX_CHARS = 8000
+
+# Step 0 accounting for issue #119.  Read-only history inspection of
+# prompts/pr-shepherd.md since the #55 prompt-self-testing seed found these
+# longest numbered-section sizes on the deployed-template line:
+# 5525 (issue #25), 6721 (2026-11-17 reconciliation), 8071 (2026-11-18
+# template sync), and 9301 (2026-11-18 live-preservation merge).  The old
+# 8000-char limit therefore rejected live prompt text that had not exceeded
+# the prompt's body budget (19966 <= 20000 chars).  10000 is the smallest
+# round budget above the largest accounted section (699 chars of headroom);
+# it is not a relaxation of the body, step-count, or 3000-char minimum
+# budgets.  Other prompt profiles carry their own independently accounted
+# budgets below the scoring helpers.
+STEP_MAX_CHARS = 10000
 
 STATIC_WEIGHT = 40.0
 SPEC_WEIGHT = 60.0
@@ -410,6 +447,10 @@ def score(static: list[dict], specs: list[dict]) -> float:
 
 
 def run(prompt_path: str, specs_path: str, repo_root: str) -> dict:
+    profile_module = profile_module_for_prompt(prompt_path)
+    if profile_module is not None:
+        return profile_module.run(prompt_path, specs_path, repo_root)
+
     with open(prompt_path, encoding="utf-8") as fh:
         text = fh.read()
     with open(specs_path, encoding="utf-8") as fh:
@@ -463,6 +504,15 @@ def main(argv=None) -> int:
                     help="score a mutated COPY of the prompt with this "
                          "clause deleted (never writes to the prompt)")
     args = ap.parse_args(argv)
+
+    # The backlog-supervisor and harness-tune profiles are deliberately
+    # self-contained modules (issue #119's smaller-shape fallback).  Route
+    # them through the same CLI so callers do not need a second command
+    # name, while leaving the shepherd profile below unchanged.
+    profile_module = profile_module_for_prompt(
+        os.path.realpath(args.prompt))
+    if profile_module is not None:
+        return profile_module.main(argv)
 
     repo_root = os.path.realpath(args.repo_root)
     prompt_path = os.path.realpath(args.prompt)
