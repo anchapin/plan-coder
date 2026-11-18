@@ -66,10 +66,10 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from trace_summary import _load_deployment_config  # noqa: E402
+from trace_summary import _load_deployment_config
 
 DEFAULT_POLICY = {
     "enabled": False,
@@ -136,7 +136,7 @@ def _save_state(path: str, state: dict) -> None:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _target_bytes(worktree: str) -> int:

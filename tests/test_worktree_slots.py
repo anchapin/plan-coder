@@ -42,7 +42,7 @@ class SlotsCase(unittest.TestCase):
         return subprocess.run(
             [sys.executable, str(SCRIPT), *argv,
              "--state-file", str(self.state_file)],
-            capture_output=True, text=True, env=env)
+            capture_output=True, text=True, env=env, check=False)
 
     def make_worktree_dir(self, name, target_bytes=0):
         wt = self.tmp / name
@@ -142,7 +142,7 @@ class EvictionCase(unittest.TestCase):
         return subprocess.run(
             [sys.executable, str(SCRIPT), *argv,
              "--state-file", str(self.state_file)],
-            capture_output=True, text=True, env=env)
+            capture_output=True, text=True, env=env, check=False)
 
     def add_slot(self, issue):
         wt = self.tmp / f"alpha-worker-{issue}"
@@ -188,7 +188,7 @@ class EvictionCase(unittest.TestCase):
             [sys.executable, str(SCRIPT), "evict", "--repo", "alpha",
              "--clone", str(self.clone), "--state-file",
              str(self.state_file)],
-            capture_output=True, text=True, env=env)
+            capture_output=True, text=True, env=env, check=False)
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
 
 
