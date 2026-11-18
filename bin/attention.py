@@ -72,7 +72,7 @@ import sys
 from datetime import UTC, datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from trace_summary import default_ledger_path  # noqa: E402
+from trace_summary import default_ledger_path
 
 MISSING_UNITS_NOTE = (
     "Ledger-visible attention only: chat-side operator taps and "
