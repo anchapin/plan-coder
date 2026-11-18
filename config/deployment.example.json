@@ -169,6 +169,10 @@
     "test_tamper": {
       "_about": "Test-tamper flag check (issue #15): a mechanical scan of a PR diff that flags a worker PR modifying or deleting EXISTING test files without brief authorization (removed assertions, loosened tolerances, added skips/xfails). Flags only — it never merges, never blocks by force and never edits the PR; a flagged PR is left for the operator. New test files alone are never a flag, and a brief that authorized test changes is never a flag. Ships disabled; enabling is a separate operator decision.",
       "enabled": false
+    },
+    "judging_files": {
+      "_about": "Judging-file flag (issue #96, from #94 Part C): a mechanical scan of a PR's changed files that flags a worker PR modifying or deleting a PRE-EXISTING judging file (gate/check script, lint config, CONTRACT.md) \u2014 visibility, not a tampering accusation. Routine ratchet/inventory touches are classified, never flagged; newly created gate files are classified creation, never flagged. Flags only — it never merges, never blocks by force and never edits the PR; a flagged PR is left for the operator. Ships disabled; enabling is a separate operator decision.",
+      "enabled": false
     }
   },
   "merge_policy": {
