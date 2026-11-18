@@ -121,6 +121,19 @@
       "enabled": false,
       "repos": [],
       "max_slots_per_repo": 8
+    },
+    "edd": {
+      "_about": "EDD (experiment-difference discipline) parts for the harness: 'fingerprint' captures the harness fingerprint at dispatch and logs one tune-pass experiment row per edit bundle (edd_experiments.jsonl), 'regress' compares worker-ledger windows around a fingerprint change. Ships disabled; enabling is a separate operator decision. EDD output is visibility only: never a merge gate, never a dispatch gate. A bundle row carries a per-bundle 'discriminator' so two edits to the SAME template in one pass stay separable.",
+      "enabled": false,
+      "parts": ["fingerprint", "regress"]
+    },
+    "verification_stamp": {
+      "_about": "Verification stamp spike (issue #95, from #94 Part A): at supervisor collection, bin/verify_stamp.py classifies what a run actually verified (E2E/SUITE/TARGETED/NONE) from its transcript with the Phase 0 segment-anchored classifier and appends a stamp row (verify class, worker vs collection commands, clean_base_verified yes|no|not_claimed) to verification_ledger.jsonl in the state dir. OBSERVE-ONLY: nothing reads the stamp to gate, block, flag or grade anything. Ships disabled; enabling is a separate operator decision.",
+      "enabled": false
+    },
+    "flagbatch": {
+      "_about": "Batched flag view spike (feedback-surface flag review, Phase 1): bin/flagbatch.py renders a standalone FLAG_BATCH.md in the state dir at the end of each shepherd cycle — one deduplicated line per flagged PR, grouped by flag class (the flag-resolution verifier's class names), with repeat counts from the shepherd ledger, plus a counts-only flag_batch_ledger.jsonl for tune-pass reporting. Presentation only: never clears a flag, never a merge/dispatch/tune input. Ships disabled; enabling is a separate operator decision, after a 100% audit of the generated view against shepherd.json, the ledger, and live PR state.",
+      "enabled": false
     }
   },
   "providers": {
@@ -201,6 +214,10 @@
     "final_note": "",
     "test_tamper": {
       "_about": "Test-tamper flag check (issue #15): a mechanical scan of a PR diff that flags a worker PR modifying or deleting EXISTING test files without brief authorization (removed assertions, loosened tolerances, added skips/xfails). Flags only — it never merges, never blocks by force and never edits the PR; a flagged PR is left for the operator. New test files alone are never a flag, and a brief that authorized test changes is never a flag. Ships disabled; enabling is a separate operator decision.",
+      "enabled": false
+    },
+    "judging_files": {
+      "_about": "Judging-file flag (issue #96, from #94 Part C): a mechanical scan of a PR's changed files that flags a worker PR modifying or deleting a PRE-EXISTING judging file (gate/check script, lint config, CONTRACT.md) \u2014 visibility, not a tampering accusation. Routine ratchet/inventory touches are classified, never flagged; newly created gate files are classified creation, never flagged. Flags only — it never merges, never blocks by force and never edits the PR; a flagged PR is left for the operator. Ships disabled; enabling is a separate operator decision.",
       "enabled": false
     }
   },

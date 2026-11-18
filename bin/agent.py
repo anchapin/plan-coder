@@ -30,6 +30,12 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
+from codemap import (
+    CODE_QUERY_TOOL,
+    CodeMap,
+    build_code_map,
+    code_map_enabled,
+)
 from plans import (
     DeploymentConfigError,
     Plan,
@@ -344,6 +350,19 @@ CTX_READ_TOOL = {
         },
     },
 }
+
+
+# --- Native code map: the code_query tool ---------------------------------
+# Issue #80, section 2: bin/codemap.py builds a native index of the
+# worktree at run start, so a worker can ask where a symbol is defined or
+# used instead of grepping the tree by hand.
+#
+# OFF by default: the gate is $WORKER_CODE_MAP=1, and the paired A/B is
+# coordinator work for a later cycle.  The tool is advertised only when the
+# gate is on AND the index was built; a failed or timed-out build leaves
+# the run exactly as it was (no tool, no prompt paragraph) and is recorded
+# in the transcript as a `codemap_build_failed` event.
+CODE_MAP_PROMPT = """- A code map for this run is available: `code_query(mode="def"|"callers"|"symbols_in"|"refs", query="<name or file path>")` tells you where a symbol is defined, where its name occurs, what a file defines, or every reference to a name. The map is a snapshot of the worktree from the start of this run: it cannot see the edits you make now, so confirm anything it reports against the current file."""
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -887,7 +906,8 @@ def _machine_manifest(workdir: str, base: str | None, gate_triggers: int,
 
 class Worker:
     def __init__(self, workdir: str, exec_timeout: int,
-                 ctx_store: ContextStore | None = None):
+                 ctx_store: ContextStore | None = None,
+                 codemap: CodeMap | None = None):
         self.workdir = os.path.realpath(workdir)
         self.exec_timeout = exec_timeout
         self.files_changed: list[str] = []
@@ -897,6 +917,9 @@ class Worker:
         # ctx_read puts the raw output back into the context on demand.
         self.ctx_store = ctx_store
         self.exec_denied_count = 0
+        # Native code map (issue #80): when an index is attached,
+        # code_query answers questions about the worktree's symbols.
+        self.codemap = codemap
 
     def _safe(self, path: str) -> str:
         full = os.path.realpath(os.path.join(self.workdir, path))
@@ -921,6 +944,9 @@ class Worker:
                                       args.get("start_line"),
                                       args.get("end_line"),
                                       args.get("needle"))
+            if name == "code_query":
+                return self._code_query(args.get("mode", ""),
+                                        args.get("query", ""))
             return f"unknown tool: {name}"
         except Exception as exc:  # noqa: BLE001
             return f"tool error: {type(exc).__name__}: {exc}"
@@ -1032,6 +1058,18 @@ class Worker:
                     "narrow the range with start_line/end_line or use a "
                     "needle")
         return f"{header}:\n{body}"
+
+    def _code_query(self, mode: str, query: str) -> str:
+        """Answer a code-map question from this run's index.
+
+        The index is a snapshot of the worktree at run start, so every
+        answer carries the index's HEAD sha, its build time, and the note
+        that it is as of run start.
+        """
+        if self.codemap is None:
+            return ("code_query: the code map is off for this run, so no "
+                    "index was built and there is nothing to query.")
+        return self.codemap.query(mode, query)
 
     def _read(self, path: str, offset: int, limit: int) -> str:
         full = self._safe(path)
@@ -1318,6 +1356,19 @@ def main() -> int:
 
     run_started = time.monotonic()
 
+    # Native code map (issue #80, section 2): built at run start when the
+    # gate is on, and stored outside the worktree.  A failed or timed-out
+    # build changes nothing about the run -- no tool, no prompt paragraph,
+    # the same tool set as before -- and is recorded in the transcript as
+    # a `codemap_build_failed` event so the failure is visible.
+    codemap = None
+    if code_map_enabled():
+        try:
+            codemap = build_code_map(workdir, transcript_dir, run_id)
+        except Exception as exc:  # noqa: BLE001 - a map must not kill a run
+            tlog({"event": "codemap_build_failed",
+                  "error": _trunc(f"{type(exc).__name__}: {exc}", 300)})
+
     # Token-out guard resolution: CLI wins, then env, then config; 0 = off.
     if args.max_tokens_out is not None:
         max_tokens_out = args.max_tokens_out
@@ -1336,17 +1387,28 @@ def main() -> int:
     tlog({"event": "started", "run_id": run_id, "tier": tier,
           "chain": [f"{n}/{m}" for n, _, m in chain],
           "stored_output": stored_output,
+          "code_map": codemap is not None,
           "ctx_store_dir": ctx_store_dir or None})
 
     with open(args.brief, encoding="utf-8") as fh:
         brief = fh.read()
 
-    worker = Worker(workdir, args.exec_timeout, ctx_store=ctx_store)
+    worker = Worker(workdir, args.exec_timeout, ctx_store=ctx_store,
+                    codemap=codemap)
     # Context Mode: the retrieval tool is advertised only when the mode is
-    # on, so an off run is byte-for-byte the pre-#52 tool set.
-    tools = list(TOOLS) + ([CTX_READ_TOOL] if ctx_store is not None else [])
+    # on, so an off run is byte-for-byte the pre-#52 tool set.  The code
+    # map tool follows the same rule: it is advertised only when the gate
+    # is on and the index was built, so a gate-off run keeps exactly the
+    # tool set it has today.
+    tools = list(TOOLS) + ([CTX_READ_TOOL] if ctx_store is not None else []) \
+        + ([CODE_QUERY_TOOL] if codemap is not None else [])
+    # The code-map paragraph is part of the same gate: with the tool
+    # absent, the worker is not told about it.
+    system_prompt = SYSTEM_PROMPT
+    if codemap is not None:
+        system_prompt += "\n" + CODE_MAP_PROMPT
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": brief},
     ]
 
@@ -1503,6 +1565,7 @@ def main() -> int:
           "token_cap": token_cap_tripped,
           "max_tokens_out": max_tokens_out,
           "stored_output": stored_output,
+          "code_map": codemap is not None,
           "ctx_store_dir": ctx_store_dir or None})
     _tlog.close()
     print(report)

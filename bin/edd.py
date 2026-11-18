@@ -42,9 +42,25 @@ deterministically, with zero LLM tokens:
                EDD test suite is the standing guard.
   experiment   Policy-gated. Append one line per tune edit bundle
                to edd_experiments.jsonl: {ts, before, after,
-               edit_summary, evidence_run_ids, attribution}.
-               One bundle = one experiment; a pass that will not
-               split its edits passes --attribution bundled.
+               edit_summary, evidence_run_ids, attribution,
+               discriminator}. One bundle = one experiment; a pass
+               that will not split its edits passes --attribution
+               bundled. The optional `discriminator` is the
+               per-bundle fingerprint that separates two edits to
+               the SAME template inside one pass (the ts of the
+               experiment row is the cut a later `edd.py regress`
+               runs at, the discriminator says WHICH bundle that
+               cut belongs to). It is the sha256 of a canonical
+               payload {bundle_id, bundle_sha256, live prompt
+               template shas} — so it changes whenever the bundle's
+               diff changes or the edited template's content
+               changes. Rows written before the discriminator
+               existed still parse (the key is optional; readers
+               treat a missing discriminator as "not_available").
+               The row's ts is the cut a later `regress --cut` runs
+               at, and it is unique inside the ledger: two bundles
+               logged in the same second get consecutive timestamps
+               so each bundle owns its own cut.
   regress      Part B report (read-only, works regardless of the
                enabled flag — auditing after a No-go disable must
                stay possible). Compare worker-ledger windows on
@@ -57,6 +73,11 @@ deterministically, with zero LLM tokens:
   summary      Harness-tune's read: fingerprint coverage over
                receipt capture records, experiment count / latest,
                with n. Read-only, flag-independent.
+  experiments  Read-only listing of the experiment ledger: one line
+               per bundle with its timestamp (the cut a later
+               `regress` runs at) and its discriminator (which
+               bundle that cut belongs to). Read-only,
+               flag-independent.
   check        Exit 0 + the enabled parts when the spike is on;
                exit 2 when disabled — prompt steps proceed exactly
                as before and do not mention EDD.
@@ -74,7 +95,10 @@ Usage:
     python3 bin/edd.py capture --run-id R [--state-dir D] [--config F] [--json]
     python3 bin/edd.py experiment --summary S [--evidence a,b]
         [--before-file F] [--after-file F] [--attribution split|bundled]
-        [--state-dir D] [--config F] [--json]
+        [--bundle-id ID] [--bundle-diff FILE] [--state-dir D]
+        [--config F] [--json]
+    python3 bin/edd.py experiments [--since YYYY-MM-DD] [--state-dir D]
+        [--config F] [--json]
     python3 bin/edd.py regress --cut TS [--days 7] [--ledger F]
         [--state-dir D] [--json]
     python3 bin/edd.py summary [--since YYYY-MM-DD] [--state-dir D] [--json]
@@ -170,6 +194,36 @@ def canonical_config(cfg: dict):
     return clean(cfg), dropped
 
 
+def live_prompt_shas() -> dict:
+    """sha256 of each prompt template as it is on disk RIGHT NOW.
+
+    The live shas are the per-bundle discriminator's third input:
+    two edit bundles applied to the same template in one pass land
+    on different file contents, so the live shas differ even when
+    the pass-wide before/after snapshots do not."""
+    out = {}
+    for fn in ("backlog-supervisor.md", "pr-shepherd.md", "harness-tune.md"):
+        out[fn[:-3]] = sha256_file(os.path.join(REPO_ROOT, "prompts", fn))
+    return out
+
+
+def experiment_discriminator(bundle_id: str | None, bundle_sha256: str | None,
+                             prompt_shas: dict) -> str:
+    """The per-bundle discriminator for an experiment row.
+
+    sha256 over a canonical payload of (bundle label, the bundle's
+    own diff hash, the live prompt template shas). Two bundles of one
+    pass differ in at least one input (a different diff, a different
+    template state, or a different label), so they get different
+    discriminators — that is what lets `edd.py regress` cuts at the
+    two experiment timestamps address the two bundles separately."""
+    payload = json.dumps({"bundle_id": bundle_id or "",
+                          "bundle_sha256": bundle_sha256 or "",
+                          "prompt_template_sha256": prompt_shas or {}},
+                         sort_keys=True)
+    return sha256_text(payload)
+
+
 def compute_fingerprint(cfg: dict) -> dict:
     workers = cfg.get("workers") or {}
     provider_order = workers.get("provider_order") or []
@@ -178,9 +232,7 @@ def compute_fingerprint(cfg: dict) -> dict:
     for name in provider_order:
         tiers = (providers_cfg.get(name) or {}).get("tiers")
         tier_model_map[name] = tiers if tiers else "builtin:agent.py"
-    prompts = {}
-    for fn in ("backlog-supervisor.md", "pr-shepherd.md", "harness-tune.md"):
-        prompts[fn[:-3]] = sha256_file(os.path.join(REPO_ROOT, "prompts", fn))
+    prompts = live_prompt_shas()
     rendered = {}
     manifest_path = os.path.join(REPO_ROOT, "local", "cron-manifest.json")
     try:
@@ -299,6 +351,29 @@ def cmd_capture(args) -> int:
     return 0
 
 
+def unique_ts(path: str, candidate: str) -> str:
+    """A timestamp no other row of the ledger already uses.
+
+    The experiment row's ts IS the cut a later `regress --cut` runs
+    at, so two bundles logged inside the same second would share one
+    cut and could not be addressed separately. When that happens the
+    new row's ts is advanced by one second per collision. The field
+    name and format are unchanged (still %Y-%m-%dT%H:%M:%SZ); only the
+    value moves, by at most a second or two."""
+    used = set()
+    for row in load_jsonl(path) or []:
+        ts = row.get("ts")
+        if isinstance(ts, str):
+            used.add(ts)
+    if candidate not in used:
+        return candidate
+    moment = _parse_ts(candidate)
+    while candidate in used:
+        moment = moment + timedelta(seconds=1)
+        candidate = moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return candidate
+
+
 def cmd_experiment(args) -> int:
     cfg = load_config(args.config)
     pol = policy_from_config(cfg)
@@ -318,14 +393,25 @@ def cmd_experiment(args) -> int:
 
     before = load_fp(args.before_file)
     after = load_fp(args.after_file) or compute_fingerprint(cfg)
-    row = {"ts": now_iso(), "edit_summary": args.summary,
+    path = os.path.join(sd, "edd_experiments.jsonl")
+    bundle_id = (args.bundle_id or "").strip() or None
+    bundle_sha256 = None
+    if args.bundle_diff:
+        bundle_sha256 = sha256_file(os.path.expanduser(args.bundle_diff))
+    row = {"ts": unique_ts(path, now_iso()), "edit_summary": args.summary,
            "evidence_run_ids": [s for s in (args.evidence or "").split(",") if s],
            "attribution": args.attribution,
            "before": before if before is not None else NA,
            "after": after}
-    path = os.path.join(sd, "edd_experiments.jsonl")
+    if bundle_id:
+        row["bundle_id"] = bundle_id
+    if bundle_sha256:
+        row["bundle_sha256"] = bundle_sha256
+    row["discriminator"] = experiment_discriminator(
+        bundle_id, bundle_sha256, live_prompt_shas())
     append_jsonl(path, row)
-    print(json.dumps({"path": path, "ts": row["ts"]}) if args.json else
+    print(json.dumps({"path": path, "ts": row["ts"],
+                      "discriminator": row["discriminator"]}) if args.json else
           f"edd: experiment logged -> {path}")
     return 0
 
@@ -377,6 +463,33 @@ def regress_report(rows, cut: str, days: int) -> dict:
             "classes_new_after": sorted(set(ca) - set(cb)),
             "classes_gone_after": sorted(set(cb) - set(ca)),
             "class_counts_before": dict(cb), "class_counts_after": dict(ca)}
+
+
+def cmd_experiments(args) -> int:
+    """Read-only listing of the experiment ledger, one line per bundle.
+
+    This is the separation aid: each row carries the timestamp a
+    `regress --cut` run uses and the discriminator that says WHICH
+    bundle that cut belongs to. Rows written before the discriminator
+    existed still list (their discriminator reads not_available)."""
+    sd = state_dir(args.state_dir)
+    if not sd:
+        print("edd: no state dir resolvable")
+        return 2
+    rows = load_jsonl(os.path.join(sd, "edd_experiments.jsonl")) or []
+    if args.since:
+        rows = [r for r in rows if (r.get("ts") or "") >= args.since]
+    out = [{"ts": r.get("ts"), "bundle_id": r.get("bundle_id"),
+            "bundle_sha256": r.get("bundle_sha256"),
+            "discriminator": r.get("discriminator") or NA,
+            "edit_summary": r.get("edit_summary")} for r in rows]
+    if args.json:
+        print(json.dumps(out, indent=1))
+    else:
+        for r in out:
+            print(f"{r['ts']}  bundle={r['bundle_id'] or NA}  "
+                  f"disc={r['discriminator']}  {r['edit_summary']}")
+    return 0
 
 
 def cmd_regress(args) -> int:
@@ -439,7 +552,8 @@ def cmd_summary(args) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("fingerprint", "check", "capture", "experiment", "regress", "summary"):
+    for name in ("fingerprint", "check", "capture", "experiment", "regress",
+                 "summary", "experiments"):
         p = sub.add_parser(name)
         p.add_argument("--config", default=None)
         p.add_argument("--state-dir", default=None)
@@ -452,15 +566,22 @@ def main(argv=None) -> int:
     ex.add_argument("--after-file", default=None)
     ex.add_argument("--attribution", default="split",
                     choices=("split", "bundled"))
+    ex.add_argument("--bundle-id", default=None,
+                    help="label of this edit bundle (e.g. 'harness-tune.md#2')")
+    ex.add_argument("--bundle-diff", default=None,
+                    help="file holding this bundle's diff; its sha256 is "
+                         "the bundle's own discriminator input")
     rg = sub.choices["regress"]
     rg.add_argument("--cut", required=True)
     rg.add_argument("--days", type=int, default=7)
     rg.add_argument("--ledger", default=None)
     sub.choices["summary"].add_argument("--since", default=None)
+    sub.choices["experiments"].add_argument("--since", default=None)
     args = ap.parse_args(argv)
     return {"fingerprint": cmd_fingerprint, "check": cmd_check,
             "capture": cmd_capture, "experiment": cmd_experiment,
-            "regress": cmd_regress, "summary": cmd_summary}[args.cmd](args)
+            "regress": cmd_regress, "summary": cmd_summary,
+            "experiments": cmd_experiments}[args.cmd](args)
 
 
 if __name__ == "__main__":
