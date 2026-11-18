@@ -5,7 +5,7 @@ Elwing spike, Part B, Phase 0 PROCEED 2026-11-18).
 Phase 0 measured this metric by hand over the most recent 20 shepherd
 cycles: 28 tasks, 32 ledger-visible attention units, and 26 of those 32
 units (81.2%) sat on tasks that did not finish correctly, dominated by
-retained NEEDS ALEX flags re-presented every cycle. This tool makes
+retained operator flags re-presented every cycle. This tool makes
 that hand count a standing weekly readout for harness-tune: one
 deterministic pass over the worker and shepherd ledgers, plus (unless
 --no-gh) the same gh refresh harness-tune step 3 already performs, to
@@ -126,7 +126,7 @@ def load_rows(path):
 
 
 def short_repo(repo):
-    """'anchapin/plan-coder' -> 'plan-coder'; short names pass through."""
+    """'example/plan-coder' -> 'plan-coder'; short names pass through."""
     return str(repo or "").strip().rstrip("/").rsplit("/", 1)[-1]
 
 
