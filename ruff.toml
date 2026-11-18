@@ -48,6 +48,8 @@ select = [
 # suppressed repo-wide and no source file has to be edited.
 "bin/agent.py" = [
     "BLE001",  # pre-existing on base: blind except
+    "PIE810",  # exec-guard startswith chain: live-only code merged at the
+               # 2026-11-17 sync; pre-existing in the deployed copy
     "EXE001",  # pre-existing on base: shebang without the executable bit
     "F401",    # pre-existing on base: unused import
     "I001",    # pre-existing on base: unsorted imports
@@ -114,6 +116,10 @@ select = [
 ]
 "bin/receipt.py" = [
     "EXE001",  # pre-existing on base: shebang without the executable bit
+    "ISC004",  # sealed-receipts half merged at the 2026-11-17 sync;
+               # pre-existing in the deployed copy
+    "PLW1510", # sealed-receipts half merged at the 2026-11-17 sync;
+               # pre-existing in the deployed copy
     "RUF100",  # pre-existing on base: unused noqa directive
     "UP017",   # pre-existing on base: datetime.timezone.utc
 ]
@@ -149,4 +155,36 @@ select = [
     "ISC004",  # pre-existing on base: implicit string concatenation
     "PLW1510", # pre-existing on base: subprocess.run without check=
     "RUF012",  # pre-existing on base: mutable class default
+]
+
+# Deployed-only tools committed at the 2026-11-17 deliberate sync pass.
+# Every violation below is pre-existing in the deployed copy, enumerated
+# per this file's convention rather than fixed in the source.
+"bin/claimcheck.py" = [
+    "EXE001",  # shebang without the executable bit
+    "RUF100",  # unused noqa directive
+]
+"bin/flagcheck.py" = [
+    "E741",    # ambiguous variable name
+    "EXE001",  # shebang without the executable bit
+    "PLW1510", # subprocess.run without check=
+    "RUF100",  # unused noqa directive
+    "UP017",   # datetime.timezone.utc
+]
+"bin/flightdeck.py" = [
+    "EXE001",  # shebang without the executable bit
+    "ISC004",  # implicit string concatenation
+    "RUF100",  # unused noqa directive
+    "UP017",   # datetime.timezone.utc
+]
+"bin/glossary_check.py" = [
+    "EXE001",  # shebang without the executable bit
+    "SIM115",  # open() without a context manager
+]
+"bin/leviathan_refresh.py" = [
+    "EXE001",  # shebang without the executable bit
+    "I001",    # unsorted imports
+    "PLW1510", # subprocess.run without check=
+    "S112",    # try/except/continue
+    "SIM115",  # open() without a context manager
 ]

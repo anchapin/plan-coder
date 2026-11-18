@@ -78,6 +78,44 @@
       "max_diff_lines": 300,
       "max_three_state_runs": 3
     },
+    "receipt": {
+      "enabled": false
+    },
+    "exec_guard": {
+      "_about": "Exec guard spike (Failproof-mined): Part A scrubs the worker shell environment (baseline + passthrough; provider env_keys and *KEY*/*TOKEN*/*SECRET*-shaped names stripped, strip set derived from providers config) and Part B denies a short scoped command list in Worker._exec (sudo, rm outside workdir/tmp/caches, .env reads, git push, mutating gh, curl|sh, find into harness state). Ships disabled; enabling is a separate operator decision. scrub_always runs Part A while Part B stays off. passthrough names extra non-secret env vars workers may inherit; strip_extra names extra vars to strip.",
+      "enabled": false,
+      "scrub_always": false,
+      "passthrough": [],
+      "strip_extra": []
+    },
+    "edd": {
+      "_about": "EDD spike Parts A+B (eval-driven development, Phase 0 PASS 2026-11-10; Part C killed in Phase 0 and is not built): harness fingerprint captured at dispatch into the receipt capture record, tune experiment ledger, per-case regression list for harness-tune. Deterministic, zero LLM tokens, never a merge/dispatch gate. Ships disabled; enabling (globally or per part) is a separate operator decision.",
+      "enabled": false,
+      "parts": [
+        "fingerprint",
+        "regress"
+      ]
+    },
+    "flagcheck": {
+      "_about": "Flag-resolution verifier spike (Phase 0 PASS 2026-11-11; Phase 1 built 2026-11-11, ships disabled): bin/flagcheck.py deterministically re-verifies, per flagged PR, whether the condition behind the shepherd's needs-operator flag still holds — closed 8-class taxonomy (ci-none, ci-reds, ci-unclassified, workflow-kind, security-scan, conflict-stale, physics-gate, held-green), per-class states resolved_verified / unresolved / unverifiable with evidence and the timestamp it rests on. physics-gate is unverifiable until the operator's word is recorded in flag_resolutions.json (state dir; written only by the main agent from the operator's word). The ledger (flagcheck_ledger.jsonl) appends ONLY on first sight or state change. Visibility only: never clears a flag, never merges, never feeds the merge policy. exempt_checks below is the mapping the operator approved as data 2026-11-11 (fluxion: the ASHRAE Strict gate, the Fabric gate, the Scripts Test Suite and its gate wrapper, transcribed from the merge_policy prose); it changes only by an operator-approved edit. Ships disabled; enabling is a separate operator decision, after 2026-11-24.",
+      "enabled": false,
+      "exempt_checks": {
+        "anchapin/fluxion": [
+          "ASHRAE 140 Strict Energy Gate",
+          "ASHRAE 140 Fabric Harness Gate",
+          "Scripts Test Suite",
+          "Gate - scripts-test-suite"
+        ]
+      }
+    },
+    "flightdeck": {
+      "_about": "Product-engineering spike Part C (Phase 0 PASS 2026-11-10, board audited 46/46 against live state): bin/flightdeck.py regenerates FLIGHT_DECK.md in the state dir from workers.json / shepherd.json / the ledgers at the end of each supervisor and shepherd cycle — Done / In progress / Next / Needs Alex / Spike windows (from an optional spike_windows.json registry in the state dir; absent registry is reported, never hardcoded). Deterministic, zero LLM tokens, generated never hand-edited, a view for the operator — never an input to a dispatch/merge/tune decision. Ships disabled; enabling is a separate operator decision.",
+      "enabled": false
+    },
+    "claimcheck": {
+      "_about": "Product-engineering spike Part D (Phase 0 PASS 2026-11-10, 48 claims re-typed, 2 premise-functioning unsupported found in SS-DFA): bin/claimcheck.py lints the ## Claims section of proposal artifacts (spike briefs, POC proposals/reports): every claim tagged [observed]/[inference]/[unsupported]/[decision], [observed] must cite a source, [unsupported] may never appear as a premise or in Verdict/Ask sections. Advisory only (exit 1 lists violations, blocks nothing); run by the artifact's author, no prompt wiring. Ships disabled; enabling is a separate operator decision.",
+      "enabled": false
+    },
     "worktree_persistence": {
       "_about": "Worktree persistence Phase 1 (plan-coder #87 Phase 0 / #89): at collection, a worker's worktree (with its in-tree build artifacts, e.g. a Rust target/) is retained as a slot keyed by repo+issue instead of being removed, and a repeat dispatch of the same issue reuses that same path, reset with git clean -fdx -e target/. Measured basis: same-path reuse 64s vs 707-899s cold cargo check; a target copied to a different path reuses nothing, so slots are never copied or shared across paths or issues. Ships disabled; enabling and per-repo opt-in are separate operator decisions. max_slots_per_repo caps retained slots per repo (closed-issue slots evict first, then least-recently-used).",
       "enabled": false,
