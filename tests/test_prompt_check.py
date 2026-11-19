@@ -361,14 +361,16 @@ class ExtendedProfileTest(unittest.TestCase):
             "merge_blocked_jittest_catch": "flag",
             "flaky_ci_rerun_once": "rerun",
             "conflicting_pr_skips_ci_fix": "merge_conflicts",
+            "terminal_merge_row_carries_packet": "merge",
+            "observed_merge_row_carries_packet": "merge",
             "diff_scope_judgement": "merge",
         }
         self.assertEqual({spec["id"]: spec["expected_decision"]
                           for spec in doc["specs"]}, expected)
         code, out = run_runner()
         self.assertEqual(code, 0, out)
-        self.assertEqual(len(doc["specs"]), 10)
-        self.assertEqual(out["spec_counts"]["deterministic"], 9)
+        self.assertEqual(len(doc["specs"]), 12)
+        self.assertEqual(out["spec_counts"]["deterministic"], 11)
         self.assertEqual(out["spec_counts"]["excluded"], 1)
 
     def test_step_zero_accounting_raises_only_the_shepherd_step_budget(self):
