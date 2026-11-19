@@ -24,6 +24,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
 REPO = Path(__file__).resolve().parent.parent
 RUNNER = REPO / "bin" / "prompt_check.py"
@@ -240,7 +241,7 @@ class RuleEngineTest(unittest.TestCase):
 class ExtendedProfileTest(unittest.TestCase):
     """Issue #119 coverage for the supervisor and harness-tune profiles."""
 
-    PROFILES = {
+    PROFILES: ClassVar[dict] = {
         "backlog-supervisor": {
             "module": "prompt_check_supervisor",
             "prompt": REPO / "prompts" / "backlog-supervisor.md",
