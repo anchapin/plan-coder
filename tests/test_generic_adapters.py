@@ -89,7 +89,7 @@ class GenericAdapterSmokeTest(unittest.TestCase):
         env["STUB_LOG"] = str(self.args_log)
         env.setdefault("STUB_EXIT", "0")
         env.update(env_overrides)
-        proc = subprocess.run(["bash", str(script)], env=env,
+        proc = subprocess.run(["bash", str(script)], env=env, check=False,
                               capture_output=True, text=True, cwd=str(self.tmp))
         return proc
 
@@ -164,7 +164,7 @@ class GenericAdapterSmokeTest(unittest.TestCase):
     # -- hygiene ------------------------------------------------------
     def test_adapters_are_syntactically_valid_bash(self):
         for script in (SUPERVISOR, SHEPHERD):
-            proc = subprocess.run(["bash", "-n", str(script)],
+            proc = subprocess.run(["bash", "-n", str(script)], check=False,
                                   capture_output=True, text=True)
             self.assertEqual(proc.returncode, 0, proc.stderr)
 
