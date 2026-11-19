@@ -64,7 +64,7 @@ import sys
 from datetime import UTC, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from trace_summary import default_ledger_path  # noqa: E402
+from trace_summary import default_ledger_path
 
 REGISTRY_FILE = "experiments.jsonl"
 
