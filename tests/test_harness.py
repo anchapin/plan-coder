@@ -1670,7 +1670,8 @@ class TestShepherdLedger(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         r = self.run_sl("append", "--repo", "alpha", "--pr", "12",
                         "--action", "merged_by_shepherd",
-                        "--outcome", "merged", "--merge-state", "UNSTABLE")
+                        "--outcome", "merged", "--merge-state", "UNSTABLE",
+                        "--ci", "build: 3 checks, all successful")
         self.assertEqual(r.returncode, 0, r.stderr)
         r = self.run_sl("append", "--repo", "beta", "--pr", "3",
                         "--action", "needs_operator", "--outcome", "physics")
