@@ -104,6 +104,24 @@ ACTIONS = ("rerun", "fix_attempt", "merged", "merged_by_shepherd",
            "trigger_requested", "checked", "snapshot", "other")
 MERGE_ACTIONS = ("merged", "merged_by_shepherd")
 
+
+def validate_ci(action: str, ci: str) -> str | None:
+    """Return an error message when a merge row has no CI evidence.
+
+    A merge row (action `merged` or `merged_by_shepherd`) with an empty
+    --ci records a merge without any evidence about the checks that ran
+    on the head SHA, which is exactly the row the weekly harness-tune
+    pass needs. Every other action may omit --ci.
+    """
+    if action not in MERGE_ACTIONS:
+        return None
+    if ci and ci.strip():
+        return None
+    return ("shepherd_ledger: --ci is required for merge actions "
+            "(merged, merged_by_shepherd): the CI summary of the checks "
+            "that ran on the merged SHA, or the local verify command and "
+            "its result counts when the repo has no CI checks")
+
 ACTOR_BY_ACTION = {
     "merged_by_shepherd": "shepherd",
     "fix_attempt": "shepherd",
@@ -301,6 +319,10 @@ def main(argv=None) -> int:
         return 2
 
     if args.cmd == "append":
+        error = validate_ci(args.action, args.ci)
+        if error:
+            print(error, file=sys.stderr)
+            return 2
         row = {
             "repo": args.repo, "pr": args.pr, "pr_url": args.url,
             "action": args.action, "outcome": args.outcome,

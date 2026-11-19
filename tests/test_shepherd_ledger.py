@@ -144,8 +144,10 @@ class ShepherdLedgerPacketTest(unittest.TestCase):
             "other": None,
         }
         for action, actor in expected.items():
+            extra = (("--ci", "actor probe")
+                     if action in ("merged", "merged_by_shepherd") else ())
             self.append("--repo", "alpha", "--pr", "1",
-                        "--action", action, "--outcome", "x")
+                        "--action", action, "--outcome", "x", *extra)
         rows = {r["action"]: r for r in self.rows()}
         self.assertEqual(set(rows), set(expected))
         for action, actor in expected.items():
@@ -294,6 +296,141 @@ class ShepherdLedgerPacketTest(unittest.TestCase):
         self.assertEqual(data["packet_coverage"], {
             "head_sha": 0.5, "ci_checks": 0.5, "merge_state": 0.5,
             "known_failures_hash": 0.5, "actor": 0.5})
+
+
+CI_SUMMARY = "build: 3 checks, all successful"
+LOCAL_VERIFY = "pytest -q (23 passed, 0 failed)"
+
+
+class ShepherdLedgerCiGuardTest(unittest.TestCase):
+    """The --ci guard on merge actions (issue #121)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="pc-shepherd-ci-"))
+        self.ledger = self.tmp / "shepherd_ledger.jsonl"
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def run_sl(self, *argv):
+        return subprocess.run(
+            [sys.executable, str(LEDGER_TOOL), *argv,
+             "--ledger", str(self.ledger)],
+            capture_output=True, text=True, timeout=60, check=False)
+
+    def rows(self):
+        if not self.ledger.exists():
+            return []
+        return [json.loads(line)
+                for line in self.ledger.read_text().splitlines()
+                if line.strip()]
+
+    # -- rejected ---------------------------------------------------------
+
+    def test_empty_ci_on_merged_by_shepherd_is_rejected(self):
+        r = self.run_sl("append", "--repo", "alpha", "--pr", "21",
+                        "--action", "merged_by_shepherd",
+                        "--merge-state", "CLEAN")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("--ci", r.stderr)
+        self.assertIn("required", r.stderr)
+        self.assertEqual(self.rows(), [])
+
+    def test_whitespace_only_ci_on_merged_by_shepherd_is_rejected(self):
+        r = self.run_sl("append", "--repo", "alpha", "--pr", "21",
+                        "--action", "merged_by_shepherd",
+                        "--ci", "   \t  ")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("--ci", r.stderr)
+        self.assertEqual(self.rows(), [])
+
+    def test_empty_ci_on_merged_is_rejected(self):
+        r = self.run_sl("append", "--repo", "beta", "--pr", "22",
+                        "--action", "merged")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("--ci", r.stderr)
+        self.assertEqual(self.rows(), [])
+
+    def test_whitespace_only_ci_on_merged_is_rejected(self):
+        r = self.run_sl("append", "--repo", "beta", "--pr", "22",
+                        "--action", "merged", "--ci", " ")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("--ci", r.stderr)
+        self.assertEqual(self.rows(), [])
+
+    # -- accepted ---------------------------------------------------------
+
+    def test_ci_summary_on_merged_by_shepherd_is_accepted(self):
+        r = self.run_sl("append", "--repo", "alpha", "--pr", "21",
+                        "--action", "merged_by_shepherd",
+                        "--ci", CI_SUMMARY, "--merge-state", "CLEAN")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        rows = self.rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["ci"], CI_SUMMARY)
+        self.assertEqual(rows[0]["action"], "merged_by_shepherd")
+
+    def test_no_ci_local_verify_string_on_merged_is_accepted(self):
+        """A repo with no CI checks: the local verify run before merging."""
+        r = self.run_sl("append", "--repo", "home-energy-twin", "--pr",
+                        "21", "--action", "merged",
+                        "--ci", LOCAL_VERIFY)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        rows = self.rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["ci"], LOCAL_VERIFY)
+
+    def test_needs_operator_with_empty_ci_is_still_accepted(self):
+        r = self.run_sl("append", "--repo", "alpha", "--pr", "7",
+                        "--action", "needs_operator",
+                        "--outcome", "physics")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        rows = self.rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["ci"], "")
+        self.assertEqual(rows[0]["action"], "needs_operator")
+
+    def test_closed_unmerged_with_empty_ci_is_still_accepted(self):
+        r = self.run_sl("append", "--repo", "alpha", "--pr", "8",
+                        "--action", "closed_unmerged")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(len(self.rows()), 1)
+
+    # -- discovered merge: otherwise unchanged ---------------------------
+
+    def test_discovered_merge_behaviour_otherwise_unchanged(self):
+        """A `merged` row (a merge the shepherd observed) still counts as
+        a merge in the summary, keeps its merge_state, and needs_operator
+        rows keep their own counts."""
+        r = self.run_sl("append", "--repo", "alpha", "--pr", "12",
+                        "--action", "merged", "--ci", CI_SUMMARY,
+                        "--merge-state", "UNSTABLE")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = self.run_sl("append", "--repo", "alpha", "--pr", "12",
+                        "--action", "needs_operator")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = self.run_sl("summary", "--json")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        data = json.loads(r.stdout)
+        self.assertEqual(data["rows"], 2)
+        self.assertEqual(data["merges"], 1)
+        self.assertEqual(data["unstable_merges"], 1)
+        self.assertEqual(data["needs_operator_distinct_prs"], 1)
+        self.assertEqual(data["by_action"]["merged"], 1)
+
+    def test_rejected_append_leaves_the_ledger_untouched(self):
+        """A refused append writes nothing and does not disturb earlier
+        rows."""
+        r = self.run_sl("append", "--repo", "alpha", "--pr", "1",
+                        "--action", "rerun", "--ci", CI_SUMMARY)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = self.run_sl("append", "--repo", "alpha", "--pr", "1",
+                        "--action", "merged_by_shepherd")
+        self.assertNotEqual(r.returncode, 0)
+        rows = self.rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["action"], "rerun")
 
 
 if __name__ == "__main__":
