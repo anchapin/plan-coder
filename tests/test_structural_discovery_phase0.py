@@ -287,8 +287,7 @@ class EndToEndTests(unittest.TestCase):
     def _write_transcript(self, directory, name, events):
         path = os.path.join(directory, name)
         with open(path, "w", encoding="utf-8") as fh:
-            for event in events:
-                fh.write(json.dumps(event) + "\n")
+            fh.writelines(json.dumps(event) + "\n" for event in events)
         return path
 
     def test_report_is_deterministic_and_carries_the_tables(self):

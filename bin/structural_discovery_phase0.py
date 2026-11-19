@@ -102,26 +102,26 @@ RULES = [
     ("vcs",
      "exec whose first command segment starts with git or gh"),
     ("verify",
-     "exec with a test/lint/typecheck/build segment (pytest, ruff, mypy, "
-     "pyright, tsc, eslint, npm/pnpm/yarn test|build|lint, cargo test|check, "
-     "go test, make test|check, gradlew, ctest, vitest, jest, bun test, "
-     "dotnet test, a repo test script such as test_*.py / run_tests / "
-     "verify*.sh)"),
+     ("exec with a test/lint/typecheck/build segment (pytest, ruff, mypy, "
+      "pyright, tsc, eslint, npm/pnpm/yarn test|build|lint, cargo test|check, "
+      "go test, make test|check, gradlew, ctest, vitest, jest, bun test, "
+      "dotnet test, a repo test script such as test_*.py / run_tests / "
+      "verify*.sh)")),
     ("struct_search",
-     "exec with a strong file-location segment (grep, egrep, rg, ag, ack, "
-     "find, fd, tree, ast-grep, sg, ctags) anywhere in the command; an "
-     "exec whose only file-location segment is a plain ls/dir, which "
-     "carries no test/lint/build segment, and which was issued before the "
-     "run's first edit; plus every list_dir call made before the run's "
-     "first edit"),
+     ("exec with a strong file-location segment (grep, egrep, rg, ag, ack, "
+      "find, fd, tree, ast-grep, sg, ctags) anywhere in the command; an "
+      "exec whose only file-location segment is a plain ls/dir, which "
+      "carries no test/lint/build segment, and which was issued before the "
+      "run's first edit; plus every list_dir call made before the run's "
+      "first edit")),
     ("struct_read",
-     "read_file (or a cat/head/tail/sed -n/wc read via exec) on a file "
-     "that is not a steering/task document, was not read earlier in the "
-     "run, and is not edited anywhere in the run"),
+     ("read_file (or a cat/head/tail/sed -n/wc read via exec) on a file "
+      "that is not a steering/task document, was not read earlier in the "
+      "run, and is not edited anywhere in the run")),
     ("task_read",
-     "read_file / list_dir of a steering or task document, of a file "
-     "already read in the run, or of a file edited in the run; "
-     "list_dir calls after the run's first edit"),
+     ("read_file / list_dir of a steering or task document, of a file "
+      "already read in the run, or of a file edited in the run; "
+      "list_dir calls after the run's first edit")),
     ("other_exec",
      "every other exec command (installs, script runs, downloads, ...)"),
 ]
@@ -308,7 +308,7 @@ def _load_deployment_config() -> dict:
         try:
             with open(path, encoding="utf-8") as fh:
                 data = json.load(fh)
-        except Exception:  # noqa: BLE001 - config is a convenience
+        except Exception:  # noqa: BLE001, S112 - config is a convenience
             continue
         if isinstance(data, dict):
             return data
