@@ -1,0 +1,385 @@
+{
+  "prompt": "prompts/backlog-supervisor.md",
+  "census_issue": "#118",
+  "census_counts": {
+    "deterministic": 31,
+    "judgement": 14
+  },
+  "note": "Deterministic behavioural specs for the backlog-supervisor prompt. Each deterministic spec names one #118 census clause and supplies the state that exercises it; removing that clause makes the rule unstated and fails the spec. Judgement clauses are explicit deterministic=false exclusions and never enter the score.",
+  "specs": [
+    {
+      "id": "collect_existing_first_spec",
+      "description": "Workers left by an earlier cycle are collected before new work is launched.",
+      "input": {"rule": "collect_existing_first", "existing_workers": true},
+      "expected_decision": "collect_existing",
+      "required_clauses": ["collect_existing_first"],
+      "deterministic": true
+    },
+    {
+      "id": "stale_working_collecting_only_spec",
+      "description": "The four-hour stale rule applies to working and collecting workers.",
+      "input": {"rule": "stale_working_collecting_only", "stale_working_or_collecting": true},
+      "expected_decision": "reset_stale_worker",
+      "required_clauses": ["stale_working_collecting_only"],
+      "deterministic": true
+    },
+    {
+      "id": "stale_excludes_escalated_split_spec",
+      "description": "Escalated and split-suggested entries are not reset by the stale rule.",
+      "input": {"rule": "stale_excludes_escalated_split", "escalated_or_split": true},
+      "expected_decision": "preserve_for_main_agent",
+      "required_clauses": ["stale_excludes_escalated_split"],
+      "deterministic": true
+    },
+    {
+      "id": "fresh_collecting_skip_spec",
+      "description": "A fresh collecting entry is owned by an overlapping cycle and is skipped.",
+      "input": {"rule": "fresh_collecting_skip", "fresh_overlapping_collector": true},
+      "expected_decision": "skip_overlapping_collector",
+      "required_clauses": ["fresh_collecting_skip"],
+      "deterministic": true
+    },
+    {
+      "id": "stale_collecting_reset_spec",
+      "description": "A collecting entry older than one hour belongs to a dead collector and is reset.",
+      "input": {"rule": "stale_collecting_reset", "dead_collector": true},
+      "expected_decision": "reset_to_working",
+      "required_clauses": ["stale_collecting_reset"],
+      "deterministic": true
+    },
+    {
+      "id": "max_parallel_active_spec",
+      "description": "No new worker is launched when the parallel-worker limit is already active.",
+      "input": {"rule": "max_parallel_active", "parallel_limit_reached": true},
+      "expected_decision": "hold_new_launch",
+      "required_clauses": ["max_parallel_active"],
+      "deterministic": true
+    },
+    {
+      "id": "cycle_token_budget_spec",
+      "description": "The cycle token budget stops new launches once collected output exceeds it.",
+      "input": {"rule": "cycle_token_budget", "token_budget_exceeded": true},
+      "expected_decision": "stop_new_launches",
+      "required_clauses": ["cycle_token_budget"],
+      "deterministic": true
+    },
+    {
+      "id": "fetch_before_issue_list_spec",
+      "description": "The repository is fetched before the open-issue list is read.",
+      "input": {"rule": "fetch_before_issue_list", "fetch_missing": true},
+      "expected_decision": "fetch_first",
+      "required_clauses": ["fetch_before_issue_list"],
+      "deterministic": true
+    },
+    {
+      "id": "backlog_empty_skip_spec",
+      "description": "A repository with no open issues is reported as BACKLOG EMPTY and skipped.",
+      "input": {"rule": "backlog_empty_skip", "zero_open_issues": true},
+      "expected_decision": "report_backlog_empty",
+      "required_clauses": ["backlog_empty_skip"],
+      "deterministic": true
+    },
+    {
+      "id": "never_create_issues_spec",
+      "description": "The supervisor never creates an issue to fill the backlog.",
+      "input": {"rule": "never_create_issues", "would_create_issue": true},
+      "expected_decision": "skip_issue_creation",
+      "required_clauses": ["never_create_issues"],
+      "deterministic": true
+    },
+    {
+      "id": "skip_factory_failure_spec",
+      "description": "Auto-filed factory failures wait for human triage and are not dispatched.",
+      "input": {"rule": "skip_factory_failure", "factory_failure": true},
+      "expected_decision": "skip_factory_failure",
+      "required_clauses": ["skip_factory_failure"],
+      "deterministic": true
+    },
+    {
+      "id": "skip_open_pr_issue_spec",
+      "description": "An issue with an already-open PR is not picked again.",
+      "input": {"rule": "skip_open_pr_issue", "open_pr_exists": true},
+      "expected_decision": "skip_open_pr_issue",
+      "required_clauses": ["skip_open_pr_issue"],
+      "deterministic": true
+    },
+    {
+      "id": "skip_assigned_issue_spec",
+      "description": "An issue already assigned to a worker state is not dispatched twice.",
+      "input": {"rule": "skip_assigned_issue", "worker_exists": true},
+      "expected_decision": "skip_assigned_issue",
+      "required_clauses": ["skip_assigned_issue"],
+      "deterministic": true
+    },
+    {
+      "id": "retry_guard_spec",
+      "description": "The ledger retry guard runs before an issue is picked.",
+      "input": {"rule": "retry_guard", "retry_guard_blocks": true},
+      "expected_decision": "hold_retry_guard",
+      "required_clauses": ["retry_guard"],
+      "deterministic": true
+    },
+    {
+      "id": "retry_requires_change_spec",
+      "description": "A retry-guarded issue needs a material brief, tier, or skip decision.",
+      "input": {"rule": "retry_requires_change", "unchanged_rebrief": true},
+      "expected_decision": "require_material_brief_change",
+      "required_clauses": ["retry_requires_change"],
+      "deterministic": true
+    },
+    {
+      "id": "failover_action_spec",
+      "description": "A failover action is obeyed before the issue is briefed.",
+      "input": {"rule": "failover_action", "failover_action": "failover"},
+      "expected_decision": "dispatch_failover",
+      "required_clauses": ["failover_action"],
+      "deterministic": true
+    },
+    {
+      "id": "failover_reflection_spec",
+      "description": "A reflection-carrying failover dispatches with the prior reflection.",
+      "input": {"rule": "failover_reflection", "reflection_required": true},
+      "expected_decision": "dispatch_with_reflection",
+      "required_clauses": ["failover_reflection"],
+      "deterministic": true
+    },
+    {
+      "id": "failover_flag_stops_spec",
+      "description": "The flag_for_operator failover action stops automatic dispatch.",
+      "input": {"rule": "failover_flag_stops", "failover_action": "flag_for_operator"},
+      "expected_decision": "flag_for_operator",
+      "required_clauses": ["failover_flag_stops"],
+      "deterministic": true
+    },
+    {
+      "id": "greenfield_brief_mode_spec",
+      "description": "A greenfield issue uses the greenfield brief mode.",
+      "input": {"rule": "greenfield_brief_mode", "greenfield": true},
+      "expected_decision": "dispatch_greenfield",
+      "required_clauses": ["greenfield_brief_mode"],
+      "deterministic": true
+    },
+    {
+      "id": "premise_symbol_exists_spec",
+      "description": "An issue whose requested symbol already exists on base is skipped.",
+      "input": {"rule": "premise_symbol_exists", "symbol_already_present": true},
+      "expected_decision": "skip_already_present",
+      "required_clauses": ["premise_symbol_exists"],
+      "deterministic": true
+    },
+    {
+      "id": "premise_gate_not_tripped_spec",
+      "description": "An issue whose stated gate has not tripped is skipped.",
+      "input": {"rule": "premise_gate_not_tripped", "gate_not_tripped": true},
+      "expected_decision": "skip_gate_blocked",
+      "required_clauses": ["premise_gate_not_tripped"],
+      "deterministic": true
+    },
+    {
+      "id": "clear_stale_worktree_spec",
+      "description": "A stale target worktree is removed before dispatch.",
+      "input": {"rule": "clear_stale_worktree", "stale_worktree": true},
+      "expected_decision": "remove_stale_worktree",
+      "required_clauses": ["clear_stale_worktree"],
+      "deterministic": true
+    },
+    {
+      "id": "delete_stale_branch_spec",
+      "description": "A leftover local or remote worker branch is deleted before dispatch.",
+      "input": {"rule": "delete_stale_branch", "stale_branch": true},
+      "expected_decision": "delete_stale_branch",
+      "required_clauses": ["delete_stale_branch"],
+      "deterministic": true
+    },
+    {
+      "id": "worktree_from_base_spec",
+      "description": "The worker worktree is cut from the repository's configured base branch.",
+      "input": {"rule": "worktree_from_base", "wrong_base": true},
+      "expected_decision": "use_repo_base_branch",
+      "required_clauses": ["worktree_from_base"],
+      "deterministic": true
+    },
+    {
+      "id": "brief_scope_room_spec",
+      "description": "Every worker brief has separate SCOPE and ROOM header blocks.",
+      "input": {"rule": "brief_scope_room", "scope_or_room_missing": true},
+      "expected_decision": "require_scope_and_room",
+      "required_clauses": ["brief_scope_room"],
+      "deterministic": true
+    },
+    {
+      "id": "brief_proof_spec",
+      "description": "Every worker brief carries a PROOF block or explicitly says none is required.",
+      "input": {"rule": "brief_proof", "proof_block_missing": true},
+      "expected_decision": "require_proof_block",
+      "required_clauses": ["brief_proof"],
+      "deterministic": true
+    },
+    {
+      "id": "optional_deliverable_spec",
+      "description": "When a DELIVERABLE line is present, the named path is checked mechanically.",
+      "input": {"rule": "optional_deliverable", "deliverable_named": true},
+      "expected_decision": "check_named_deliverable",
+      "required_clauses": ["optional_deliverable"],
+      "deterministic": true
+    },
+    {
+      "id": "structured_diagnostics_spec",
+      "description": "A repair brief consumes parsed structured diagnostics rather than a raw log.",
+      "input": {"rule": "structured_diagnostics", "raw_diagnostics": true},
+      "expected_decision": "require_structured_diagnostics",
+      "required_clauses": ["structured_diagnostics"],
+      "deterministic": true
+    },
+    {
+      "id": "atomic_state_save_spec",
+      "description": "State is never written directly; the atomic state-write path is used.",
+      "input": {"rule": "atomic_state_save", "direct_state_write": true},
+      "expected_decision": "reject_direct_write",
+      "required_clauses": ["atomic_state_save"],
+      "deterministic": true
+    },
+    {
+      "id": "collect_claim_before_review_spec",
+      "description": "A collector claims a worker atomically before reviewing it.",
+      "input": {"rule": "collect_claim_before_review", "overlapping_collector": true},
+      "expected_decision": "claim_before_review",
+      "required_clauses": ["collect_claim_before_review"],
+      "deterministic": true
+    },
+    {
+      "id": "ledger_outcome_required_spec",
+      "description": "Every collected worker gets one outcome row in the metrics ledger.",
+      "input": {"rule": "ledger_outcome_required", "collected_worker": true},
+      "expected_decision": "append_ledger_outcome",
+      "required_clauses": ["ledger_outcome_required"],
+      "deterministic": true
+    },
+    {
+      "id": "issue_well_specified_judgement",
+      "description": "Is this issue sufficiently well specified to brief?",
+      "input": {},
+      "expected_decision": null,
+      "clause": "issue_well_specified",
+      "judgement_note": "needs a model judgement (issue specification quality) -- excluded from the deterministic score, not faked",
+      "deterministic": false
+    },
+    {
+      "id": "issue_priority_judgement",
+      "description": "Which mix of quick wins and substantial issues best fits this cycle?",
+      "input": {},
+      "expected_decision": null,
+      "clause": "issue_priority_judgement",
+      "judgement_note": "needs a model judgement (issue priority) -- excluded from the deterministic score, not faked",
+      "deterministic": false
+    },
+    {
+      "id": "merge_ordering_judgement",
+      "description": "Which issue is the foundation when the issue graph has dependencies?",
+      "input": {},
+      "expected_decision": null,
+      "clause": "merge_ordering",
+      "judgement_note": "needs a model judgement (dependency ordering) -- excluded from the deterministic score, not faked",
+      "deterministic": false
+    },
+    {
+      "id": "same_repo_conflict_avoidance_judgement",
+      "description": "Which issue areas are different enough for parallel workers in one repository?",
+      "input": {},
+      "expected_decision": null,
+      "clause": "same_repo_conflict_avoidance",
+      "judgement_note": "needs a model judgement (codebase area selection) -- excluded from the deterministic score, not faked",
+      "deterministic": false
+    },
+    {
+      "id": "skip_note_judgement",
+      "description": "Does this repository-specific note justify skipping the issue?",
+      "input": {},
+      "expected_decision": null,
+      "clause": "skip_note_judgement",
+      "judgement_note": "needs a model judgement (repository skip note) -- excluded from the deterministic score, not faked",
+      "deterministic": false
+    },
+    {
+      "id": "machine_build_budget_judgement",
+      "description": "Would the issue's build work exceed the machine's local budget?",
+      "input": {},
+      "expected_decision": null,
+      "clause": "machine_build_budget",
+      "judgement_note": "needs a model judgement (machine build budget) -- excluded from the deterministic score, not faked",
+      "deterministic": false
+    },
+    {
+      "id": "failover_narrowing_judgement",
+      "description": "How should the brief be narrowed after a failed attempt?",
+      "input": {},
+      "expected_decision": null,
+      "clause": "failover_narrowing_judgement",
+      "judgement_note": "needs a model judgement (brief narrowing) -- excluded from the deterministic score, not faked",
+      "deterministic": false
+    },
+    {
+      "id": "diff_review_quality_judgement",
+      "description": "Does the worker diff satisfy the issue's acceptance criteria?",
+      "input": {},
+      "expected_decision": null,
+      "clause": "diff_review_quality",
+      "judgement_note": "needs a model judgement (diff correctness) -- excluded from the deterministic score, not faked",
+      "deterministic": false
+    },
+    {
+      "id": "trivial_fallout_judgement",
+      "description": "Is this failure trivial fallout that the supervisor should fix?",
+      "input": {},
+      "expected_decision": null,
+      "clause": "trivial_fallout_judgement",
+      "judgement_note": "needs a model judgement (trivial-fallout boundary) -- excluded from the deterministic score, not faked",
+      "deterministic": false
+    },
+    {
+      "id": "deadline_progress_judgement",
+      "description": "Is the unfinished worker close enough to keep running?",
+      "input": {},
+      "expected_decision": null,
+      "clause": "deadline_progress_judgement",
+      "judgement_note": "needs a model judgement (worker progress) -- excluded from the deterministic score, not faked",
+      "deterministic": false
+    },
+    {
+      "id": "split_breakdown_judgement",
+      "description": "What concrete sub-tasks should the proposed split contain?",
+      "input": {},
+      "expected_decision": null,
+      "clause": "split_breakdown_judgement",
+      "judgement_note": "needs a model judgement (split proposal) -- excluded from the deterministic score, not faked",
+      "deterministic": false
+    },
+    {
+      "id": "escalation_diagnosis_judgement",
+      "description": "Is the worker stuck rather than making steady progress?",
+      "input": {},
+      "expected_decision": null,
+      "clause": "escalation_diagnosis_judgement",
+      "judgement_note": "needs a model judgement (worker diagnosis) -- excluded from the deterministic score, not faked",
+      "deterministic": false
+    },
+    {
+      "id": "proof_material_judgement",
+      "description": "Which evidence best proves this kind of PR?",
+      "input": {},
+      "expected_decision": null,
+      "clause": "proof_material_judgement",
+      "judgement_note": "needs a model judgement (proof material selection) -- excluded from the deterministic score, not faked",
+      "deterministic": false
+    },
+    {
+      "id": "tier_selection_judgement",
+      "description": "Which worker tier fits this issue's scope and risk?",
+      "input": {},
+      "expected_decision": null,
+      "clause": "tier_selection_judgement",
+      "judgement_note": "needs a model judgement (tier selection) -- excluded from the deterministic score, not faked",
+      "deterministic": false
+    }
+  ]
+}

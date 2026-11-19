@@ -24,6 +24,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
 REPO = Path(__file__).resolve().parent.parent
 RUNNER = REPO / "bin" / "prompt_check.py"
@@ -38,6 +39,20 @@ def _load_module():
     spec = importlib.util.spec_from_file_location("bin_prompt_check", RUNNER)
     module = importlib.util.module_from_spec(spec)
     sys.modules["bin_prompt_check"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_profile(module_name: str):
+    """Load one of the self-contained per-prompt profile modules."""
+    path = REPO / "bin" / (module_name + ".py")
+    spec = importlib.util.spec_from_file_location("bin_" + module_name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["bin_" + module_name] = module
+    # The profile modules import the shared score helper by module name.
+    bin_dir = str(REPO / "bin")
+    if bin_dir not in sys.path:
+        sys.path.insert(0, bin_dir)
     spec.loader.exec_module(module)
     return module
 
@@ -221,6 +236,149 @@ class RuleEngineTest(unittest.TestCase):
             clauses)
         self.assertEqual(decision, "hold_unstated")
         self.assertEqual(clause, "known_failure_exemption")
+
+
+class ExtendedProfileTest(unittest.TestCase):
+    """Issue #119 coverage for the supervisor and harness-tune profiles."""
+
+    PROFILES: ClassVar[dict] = {
+        "backlog-supervisor": {
+            "module": "prompt_check_supervisor",
+            "prompt": REPO / "prompts" / "backlog-supervisor.md",
+            "specs": (REPO / "tests" / "fixtures" / "prompt_specs" /
+                      "backlog-supervisor.json"),
+            "deterministic": 31,
+            "judgement": 14,
+        },
+        "harness-tune": {
+            "module": "prompt_check_harness_tune",
+            "prompt": REPO / "prompts" / "harness-tune.md",
+            "specs": (REPO / "tests" / "fixtures" / "prompt_specs" /
+                      "harness-tune.json"),
+            "deterministic": 10,
+            "judgement": 8,
+        },
+    }
+
+    @classmethod
+    def setUpClass(cls):
+        cls.loaded = {
+            name: _load_profile(config["module"])
+            for name, config in cls.PROFILES.items()
+        }
+
+    def test_each_live_profile_scores_100_and_exits_zero(self):
+        for name, config in self.PROFILES.items():
+            with self.subTest(profile=name):
+                code, out = run_runner(
+                    "--prompt", str(config["prompt"]),
+                    "--specs", str(config["specs"]))
+                self.assertEqual(code, 0, out)
+                self.assertEqual(out["score"], 100.0)
+                self.assertTrue(out["ok"])
+                self.assertTrue(all(check["passed"]
+                                    for check in out["static"]))
+                self.assertTrue(all(spec["passed"] for spec in out["specs"]))
+
+    def test_census_counts_are_exact(self):
+        for name, config in self.PROFILES.items():
+            with self.subTest(profile=name):
+                code, out = run_runner(
+                    "--prompt", str(config["prompt"]),
+                    "--specs", str(config["specs"]))
+                self.assertEqual(code, 0, out)
+                self.assertEqual(out["spec_counts"]["deterministic"],
+                                 config["deterministic"])
+                self.assertEqual(out["spec_counts"]["excluded"],
+                                 config["judgement"])
+
+    def test_judgement_clauses_are_present_and_excluded(self):
+        for name, config in self.PROFILES.items():
+            with self.subTest(profile=name):
+                module = self.loaded[name]
+                specs = json.loads(config["specs"].read_text(
+                    encoding="utf-8"))["specs"]
+                judgement = [spec for spec in specs
+                             if not spec.get("deterministic", True)]
+                self.assertEqual(len(judgement), config["judgement"])
+                results, excluded = module.evaluate_specs(
+                    config["prompt"].read_text(encoding="utf-8"), specs)
+                excluded_by_id = {spec["id"]: spec for spec in excluded}
+                for spec in judgement:
+                    self.assertIn(spec["id"], excluded_by_id)
+                    self.assertTrue(excluded_by_id[spec["id"]]["clause_present"])
+                    self.assertNotIn(spec["id"],
+                                     {result["id"] for result in results})
+
+    def test_every_deterministic_clause_has_a_spec_mapping(self):
+        for name, config in self.PROFILES.items():
+            with self.subTest(profile=name):
+                module = self.loaded[name]
+                specs = json.loads(config["specs"].read_text(
+                    encoding="utf-8"))["specs"]
+                report = module.coverage_report(specs)
+                self.assertEqual(report["unmapped_deterministic"], [])
+                self.assertEqual(report["untestable_deterministic"], [])
+                self.assertEqual(
+                    set(report["deterministic_clause_to_spec"]),
+                    set(module.DETERMINISTIC_CLAUSES),
+                )
+                self.assertEqual(
+                    set(report["judgement_clause_to_excluded_spec"]),
+                    set(module.JUDGEMENT_CLAUSES),
+                )
+
+    def test_removing_each_deterministic_clause_fails_its_spec(self):
+        for name, config in self.PROFILES.items():
+            module = self.loaded[name]
+            prompt_text = config["prompt"].read_text(encoding="utf-8")
+            specs = json.loads(config["specs"].read_text(
+                encoding="utf-8"))["specs"]
+            report = module.coverage_report(specs)
+            for clause_id, spec_ids in (
+                    report["deterministic_clause_to_spec"].items()):
+                with self.subTest(profile=name, clause=clause_id):
+                    mutated = module.remove_clause(prompt_text, clause_id)
+                    results, _excluded = module.evaluate_specs(mutated, specs)
+                    results_by_id = {result["id"]: result
+                                     for result in results}
+                    failed = [results_by_id[sid] for sid in spec_ids
+                              if not results_by_id[sid]["passed"]]
+                    self.assertTrue(failed, spec_ids)
+                    for result in failed:
+                        self.assertIn(clause_id, result["detail"])
+                        self.assertEqual(result["clause"], clause_id)
+
+    def test_shepherd_specs_and_decisions_are_unchanged(self):
+        doc = json.loads(SPECS.read_text(encoding="utf-8"))
+        expected = {
+            "merge_green_worker_branch": "merge",
+            "merge_blocked_non_worker_branch": "flag",
+            "merge_blocked_stale_sha": "hold_stale_sha",
+            "merge_unstable_known_failure_exempted": "merge",
+            "merge_blocked_unstable_new_failure": "flag",
+            "merge_blocked_workflow_touch": "flag",
+            "merge_blocked_jittest_catch": "flag",
+            "flaky_ci_rerun_once": "rerun",
+            "conflicting_pr_skips_ci_fix": "merge_conflicts",
+            "terminal_merge_row_carries_packet": "merge",
+            "observed_merge_row_carries_packet": "merge",
+            "diff_scope_judgement": "merge",
+        }
+        self.assertEqual({spec["id"]: spec["expected_decision"]
+                          for spec in doc["specs"]}, expected)
+        code, out = run_runner()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(doc["specs"]), 12)
+        self.assertEqual(out["spec_counts"]["deterministic"], 11)
+        self.assertEqual(out["spec_counts"]["excluded"], 1)
+
+    def test_step_zero_accounting_raises_only_the_shepherd_step_budget(self):
+        self.assertEqual(prompt_check.LENGTH_MAX, 20000)
+        self.assertEqual(prompt_check.STEP_MAX_CHARS, 10000)
+        self.assertEqual(self.loaded["backlog-supervisor"].STEP_MAX_CHARS,
+                         20000)
+        self.assertEqual(self.loaded["harness-tune"].STEP_MAX_CHARS, 14000)
 
 
 if __name__ == "__main__":
