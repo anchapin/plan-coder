@@ -1,0 +1,279 @@
+{
+  "note": "Part A self-test corpus for ONE evaluator class: the shepherd merge/classification evaluator (pre-existing-vs-new failure classification and clean-base claims). Every fixture is mechanically derived from a source incident named in this file's source_incident field. Classes: seed | paraphrase | negation | clean-must-pass. known_correct_verdict is the shepherd decision the source incident's rules imply (rerun | fix_attempt | flag | merge).",
+  "evaluator_class": "shepherd-merge-classification",
+  "fixtures": [
+    {
+      "id": "pa-s01-flaky-runner-died",
+      "class": "seed",
+      "source_incident": "prompts/pr-shepherd.md step 2a (flaky/infra clause); shipped spec flaky_ci_rerun_once (tests/fixtures/prompt_specs/pr-shepherd.json)",
+      "fixture_text": "CI on PR worker/issue-55 failed, but the failure looks flaky/infra rather than a real defect: the runner died mid-job and the job log ends with a network timeout, not an assertion. The test suite never reached a failing assertion. Under the shepherd's flaky/infra clause this is rerun once.",
+      "known_correct_verdict": "rerun"
+    },
+    {
+      "id": "pa-s02-flaky-network-timeout",
+      "class": "seed",
+      "source_incident": "prompts/pr-shepherd.md step 2a (flaky/infra clause, 'network timeout' limb)",
+      "fixture_text": "PR worker/issue-55 has one red check. The log shows a network timeout while fetching dependencies and the runner was lost before any test executed; the same check was green on the previous run. This is an infrastructure failure, not a code failure.",
+      "known_correct_verdict": "rerun"
+    },
+    {
+      "id": "pa-s03-flaky-rate-limit",
+      "class": "seed",
+      "source_incident": "prompts/pr-shepherd.md step 2a (flaky/infra clause, 'rate limit' limb)",
+      "fixture_text": "PR worker/issue-55 reports a failing check, but the only error is an API rate limit: 'API rate limit exceeded'. The runner was healthy and the job never reached the test step.",
+      "known_correct_verdict": "rerun"
+    },
+    {
+      "id": "pa-s04-nonworker-branch-lint",
+      "class": "seed",
+      "source_incident": "prompts/pr-shepherd.md step 2c (failure on a non-worker branch); shipped spec merge_blocked_non_worker_branch",
+      "fixture_text": "PR #77 is on head branch `main`, not a worker branch, and its CI has a real lint failure: ruff reports F401 unused import in src/app.py. The fix would be mechanical, but the head branch is not worker/*.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-s05-nonworker-branch-test",
+      "class": "seed",
+      "source_incident": "prompts/pr-shepherd.md step 2c (failure on a non-worker branch)",
+      "fixture_text": "PR #78 is on head branch `develop` and one test fails: tests/test_api.py::test_create returns 500. The failure is a real test failure rather than an environment problem, but the head branch is not worker/*.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-s06-needs-judgment-scope",
+      "class": "seed",
+      "source_incident": "prompts/pr-shepherd.md step 2c (failure that needs judgment)",
+      "fixture_text": "PR worker/issue-60 fails CI and the failure cannot be decided mechanically: the diff changes the retry policy and the red check is a timing-sensitive integration test that is green on the base branch and red on the PR head. Whether the change is correct needs judgment.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-s07-needs-judgment-cause",
+      "class": "seed",
+      "source_incident": "prompts/pr-shepherd.md step 2c (failure that needs judgment)",
+      "fixture_text": "PR worker/issue-61 has a failing check whose cause is unclear: each run asserts something different and the change touches the session store. Deciding this needs judgment - no mechanical repair is identifiable.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-s08-unstable-preexisting-tracked",
+      "class": "seed",
+      "source_incident": "prompts/pr-shepherd.md merge policy, UNSTABLE / known-failure-exemption clause; shipped spec merge_unstable_known_failure_exempted",
+      "fixture_text": "PR worker/issue-55 reports mergeStateStatus UNSTABLE. The only failing check is a pre-existing develop-wide lint drift that is already tracked in follow-up issue #77; every other check is green. Nothing in this PR introduced it.",
+      "known_correct_verdict": "merge"
+    },
+    {
+      "id": "pa-s09-unstable-new-failure",
+      "class": "seed",
+      "source_incident": "prompts/pr-shepherd.md merge policy, UNSTABLE clause (failure not pre-existing); shipped spec merge_blocked_unstable_new_failure",
+      "fixture_text": "PR worker/issue-55 reports mergeStateStatus UNSTABLE. The only failing check is a new failure introduced by this PR (tests/test_merge.py::test_conflict_resolution), and every other check is green.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-s10-unstable-preexisting-untracked",
+      "class": "seed",
+      "source_incident": "prompts/pr-shepherd.md merge policy, UNSTABLE clause ('already tracked in follow-up issues' limb)",
+      "fixture_text": "PR worker/issue-55 reports mergeStateStatus UNSTABLE. The only failing check is a pre-existing develop-wide failure, but it is not tracked in any follow-up issue yet; every other check is green.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-s11-cleanbase-reproduces",
+      "class": "seed",
+      "source_incident": "prompts/pr-shepherd.md merge policy, UNSTABLE clause, decided by a clean-base comparison (docs/OPERATIONS.md stale-test protocol; bin/verify_stamp.py clean_base_verified vocabulary)",
+      "fixture_text": "PR worker/issue-55 reports mergeStateStatus UNSTABLE. A clean-base comparison was run: the same check fails on the base branch, so the failure is a pre-existing develop-wide issue already tracked in follow-up issue #77; every other check is green.",
+      "known_correct_verdict": "merge"
+    },
+    {
+      "id": "pa-s12-cleanbase-clean",
+      "class": "seed",
+      "source_incident": "prompts/pr-shepherd.md merge policy, UNSTABLE clause, decided by a clean-base comparison (docs/OPERATIONS.md stale-test protocol)",
+      "fixture_text": "PR worker/issue-55 reports mergeStateStatus UNSTABLE. A clean-base comparison was run and the same check passes on the base branch, so the failure is new to this PR; every other check is green.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-s13-unstable-develop-type-error",
+      "class": "seed",
+      "source_incident": "prompts/pr-shepherd.md merge policy, UNSTABLE / known-failure-exemption clause",
+      "fixture_text": "PR worker/issue-62 reports mergeStateStatus UNSTABLE. The single failing check is a pre-existing develop-wide type error in a shared module that is already tracked in follow-up issue #91; every other check is green.",
+      "known_correct_verdict": "merge"
+    },
+    {
+      "id": "pa-s14-unstable-repowide-ruff-drift",
+      "class": "seed",
+      "source_incident": "prompts/pr-shepherd.md merge policy, UNSTABLE / known-failure-exemption clause",
+      "fixture_text": "PR worker/issue-63 reports mergeStateStatus UNSTABLE. The only failing check is the repo-wide ruff drift that predates this branch and is already tracked in follow-up issue #92; every other check is green.",
+      "known_correct_verdict": "merge"
+    },
+    {
+      "id": "pa-p01-flaky-runner-died-paraphrase",
+      "class": "paraphrase",
+      "source_incident": "pa-s01-flaky-runner-died (mechanical rewording: synonym and clause reordering, no fact changed)",
+      "fixture_text": "The red check on PR worker/issue-55 is not a real defect but flaky/infra: the runner died part-way through the job and the log ends in a network timeout rather than an assertion, and no test assertion ever failed. The shepherd's flaky/infra clause applies: rerun the failed jobs once.",
+      "known_correct_verdict": "rerun"
+    },
+    {
+      "id": "pa-p02-flaky-network-timeout-paraphrase",
+      "class": "paraphrase",
+      "source_incident": "pa-s02-flaky-network-timeout (mechanical rewording)",
+      "fixture_text": "One check is red on PR worker/issue-55. The log records a network timeout while dependencies were fetched and the runner was lost before the suite started; the same check was green on the earlier run. This is an infrastructure failure, not a code failure.",
+      "known_correct_verdict": "rerun"
+    },
+    {
+      "id": "pa-p03-flaky-rate-limit-paraphrase",
+      "class": "paraphrase",
+      "source_incident": "pa-s03-flaky-rate-limit (mechanical rewording)",
+      "fixture_text": "PR worker/issue-55 has one failing check whose only error is 'API rate limit exceeded': the runner was healthy and the job never reached the test step. That is a rate-limit failure rather than a defect in the diff.",
+      "known_correct_verdict": "rerun"
+    },
+    {
+      "id": "pa-p04-nonworker-branch-lint-paraphrase",
+      "class": "paraphrase",
+      "source_incident": "pa-s04-nonworker-branch-lint (mechanical rewording)",
+      "fixture_text": "PR #77 sits on head branch `main`, which is not a worker branch, and its CI has a genuine lint failure - ruff flags F401, an unused import, in src/app.py. The repair would be mechanical, but the head branch is not worker/*.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-p05-nonworker-branch-test-paraphrase",
+      "class": "paraphrase",
+      "source_incident": "pa-s05-nonworker-branch-test (mechanical rewording)",
+      "fixture_text": "PR #78 is on head branch `develop` and a test fails: tests/test_api.py::test_create returns 500. The failure is genuine rather than an environment problem, but the head branch is not worker/*.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-p06-needs-judgment-scope-paraphrase",
+      "class": "paraphrase",
+      "source_incident": "pa-s06-needs-judgment-scope (mechanical rewording)",
+      "fixture_text": "CI fails on PR worker/issue-60 and the failure cannot be decided mechanically: the diff changes the retry policy and the red check is a timing-sensitive integration test that is green on the base branch and red on the PR head. Deciding whether the change is right needs judgment.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-p07-needs-judgment-cause-paraphrase",
+      "class": "paraphrase",
+      "source_incident": "pa-s07-needs-judgment-cause (mechanical rewording)",
+      "fixture_text": "The failing check on PR worker/issue-61 has an unclear cause - each run asserts something different and the change touches the session store. Deciding it needs judgment; no mechanical repair is identifiable.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-p08-unstable-preexisting-tracked-paraphrase",
+      "class": "paraphrase",
+      "source_incident": "pa-s08-unstable-preexisting-tracked (mechanical rewording)",
+      "fixture_text": "mergeStateStatus on PR worker/issue-55 is UNSTABLE. The one failing check is a pre-existing develop-wide lint drift already tracked in follow-up issue #77, and every other check is green. This PR did not introduce it.",
+      "known_correct_verdict": "merge"
+    },
+    {
+      "id": "pa-p09-unstable-new-failure-paraphrase",
+      "class": "paraphrase",
+      "source_incident": "pa-s09-unstable-new-failure (mechanical rewording)",
+      "fixture_text": "mergeStateStatus on PR worker/issue-55 is UNSTABLE. Its only failing check is a new failure introduced by this PR (tests/test_merge.py::test_conflict_resolution); every other check is green.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-p10-unstable-preexisting-untracked-paraphrase",
+      "class": "paraphrase",
+      "source_incident": "pa-s10-unstable-preexisting-untracked (mechanical rewording)",
+      "fixture_text": "mergeStateStatus on PR worker/issue-55 is UNSTABLE. The only failing check is a pre-existing develop-wide failure that is not tracked in any follow-up issue yet; every other check is green.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-p11-cleanbase-reproduces-paraphrase",
+      "class": "paraphrase",
+      "source_incident": "pa-s11-cleanbase-reproduces (mechanical rewording)",
+      "fixture_text": "mergeStateStatus on PR worker/issue-55 is UNSTABLE. A clean-base comparison was performed: the same check fails on the base branch, so the failure is a pre-existing develop-wide issue already tracked in follow-up issue #77; every other check is green.",
+      "known_correct_verdict": "merge"
+    },
+    {
+      "id": "pa-p12-cleanbase-clean-paraphrase",
+      "class": "paraphrase",
+      "source_incident": "pa-s12-cleanbase-clean (mechanical rewording)",
+      "fixture_text": "mergeStateStatus on PR worker/issue-55 is UNSTABLE. A clean-base comparison was performed and the same check passes on the base branch, so the failure is new to this PR; every other check is green.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-p13-unstable-develop-type-error-paraphrase",
+      "class": "paraphrase",
+      "source_incident": "pa-s13-unstable-develop-type-error (mechanical rewording)",
+      "fixture_text": "mergeStateStatus on PR worker/issue-62 is UNSTABLE. Its single failing check is a pre-existing develop-wide type error in a shared module, already tracked in follow-up issue #91; every other check is green.",
+      "known_correct_verdict": "merge"
+    },
+    {
+      "id": "pa-p14-unstable-repowide-ruff-drift-paraphrase",
+      "class": "paraphrase",
+      "source_incident": "pa-s14-unstable-repowide-ruff-drift (mechanical rewording)",
+      "fixture_text": "mergeStateStatus on PR worker/issue-63 is UNSTABLE. The only failing check is the repo-wide ruff drift that predates this branch and is already tracked in follow-up issue #92; every other check is green.",
+      "known_correct_verdict": "merge"
+    },
+    {
+      "id": "pa-n01-not-flaky-real-failure",
+      "class": "negation",
+      "source_incident": "pa-s01-flaky-runner-died, polarity flipped on the flaky/infra clause ('not flaky/infra' -> real test failure on a worker branch)",
+      "fixture_text": "The red check on PR worker/issue-55 is not flaky/infra: the runner was healthy and the log ends in a real test failure (tests/test_merge.py::test_conflict_resolution). The failing test is mechanical to fix on this worker branch.",
+      "known_correct_verdict": "fix_attempt"
+    },
+    {
+      "id": "pa-n02-not-preexisting-new-failure",
+      "class": "negation",
+      "source_incident": "pa-s08-unstable-preexisting-tracked, polarity flipped on the pre-existing limb ('not a pre-existing develop-wide issue' -> new failure in this PR)",
+      "fixture_text": "mergeStateStatus on PR worker/issue-55 is UNSTABLE. Its only failing check is not a pre-existing develop-wide issue; it is a new failure introduced by this PR, and every other check is green.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-n03-cleanbase-does-not-reproduce",
+      "class": "negation",
+      "source_incident": "pa-s11-cleanbase-reproduces, polarity flipped on the clean-base comparison (the base no longer reproduces the failure)",
+      "fixture_text": "mergeStateStatus on PR worker/issue-55 is UNSTABLE. The clean-base comparison was performed and it does not reproduce the failure - the base branch passes the same check - so the failure is new to this PR; every other check is green.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-n04-cleanbase-also-fails",
+      "class": "negation",
+      "source_incident": "pa-s12-cleanbase-clean, polarity flipped on the clean-base comparison (the base fails the same check too)",
+      "fixture_text": "mergeStateStatus on PR worker/issue-55 is UNSTABLE. The clean-base comparison shows the base branch fails the same check too, so it is a pre-existing develop-wide issue already tracked in follow-up issue #77; every other check is green.",
+      "known_correct_verdict": "merge"
+    },
+    {
+      "id": "pa-n05-not-rate-limit-real-lint",
+      "class": "negation",
+      "source_incident": "pa-s03-flaky-rate-limit, polarity flipped on the flaky/infra clause ('not a rate limit' -> real lint failure on a worker branch)",
+      "fixture_text": "PR worker/issue-55 has one failing check and it is not a rate limit: the runner was healthy and the job reached the test step, where ruff reports a real lint failure (F401 unused import) in src/app.py on this worker branch.",
+      "known_correct_verdict": "fix_attempt"
+    },
+    {
+      "id": "pa-c01-clean-base-passes-failure-is-new",
+      "class": "clean-must-pass",
+      "source_incident": "clean-base claim vocabulary (bin/verify_stamp.py clean_base_verified) applied to the prompts/pr-shepherd.md UNSTABLE clause: a clean base means the failure is new to the PR",
+      "fixture_text": "mergeStateStatus on PR worker/issue-55 is UNSTABLE. The clean-base comparison was run by stashing the change: the base branch passes the same check, so the failing check is new to this PR and every other check is green.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-c02-clean-base-fails-failure-is-preexisting",
+      "class": "clean-must-pass",
+      "source_incident": "clean-base claim vocabulary (bin/verify_stamp.py clean_base_verified) applied to the prompts/pr-shepherd.md UNSTABLE clause: the base reproduces the failure, so it is pre-existing and tracked",
+      "fixture_text": "mergeStateStatus on PR worker/issue-55 is UNSTABLE. The clean-base comparison was run by stashing the change: the base branch fails the same check, so it is a pre-existing develop-wide issue already tracked in follow-up issue #77; every other check is green.",
+      "known_correct_verdict": "merge"
+    },
+    {
+      "id": "pa-c03-clean-base-passes-mechanical-on-worker",
+      "class": "clean-must-pass",
+      "source_incident": "clean-base claim vocabulary (bin/verify_stamp.py clean_base_verified) applied to the prompts/pr-shepherd.md step 2b clause: a clean base makes the failure a real, mechanical one on the worker branch",
+      "fixture_text": "PR worker/issue-55 has a clean base: stashing the change makes the failing test pass, so the red check on this worker branch is a real lint failure of our own (ruff F401 in src/app.py) that needs a mechanical fix.",
+      "known_correct_verdict": "fix_attempt"
+    },
+    {
+      "id": "pa-c04-clean-base-passes-nonworker-branch",
+      "class": "clean-must-pass",
+      "source_incident": "clean-base claim vocabulary (bin/verify_stamp.py clean_base_verified) applied to the prompts/pr-shepherd.md step 2c clause: a clean base does not make a non-worker branch fixable",
+      "fixture_text": "PR #77 has a clean base: with the change stashed the failing check passes, so the lint failure (ruff F401) is new - but the head branch is `main`, not worker/*.",
+      "known_correct_verdict": "flag"
+    },
+    {
+      "id": "pa-c05-clean-base-fails-only-known-failure",
+      "class": "clean-must-pass",
+      "source_incident": "clean-base claim vocabulary (bin/verify_stamp.py clean_base_verified) applied to the prompts/pr-shepherd.md UNSTABLE clause: the only failure is the tracked pre-existing one",
+      "fixture_text": "PR worker/issue-55 has a clean base: with the change stashed the same check still fails, so the failure is a pre-existing develop-wide issue already tracked in follow-up issue #77 and the PR is only UNSTABLE because of it; every other check is green.",
+      "known_correct_verdict": "merge"
+    },
+    {
+      "id": "pa-c06-clean-base-passes-needs-judgment",
+      "class": "clean-must-pass",
+      "source_incident": "clean-base claim vocabulary (bin/verify_stamp.py clean_base_verified) applied to the prompts/pr-shepherd.md step 2c clause: a clean base leaves a timing failure that needs judgment",
+      "fixture_text": "PR worker/issue-60 has a clean base: with the change stashed the timing-sensitive integration test passes, so the red check is new to this PR and the cause needs judgment; it is not a mechanical fix.",
+      "known_correct_verdict": "flag"
+    }
+  ]
+}

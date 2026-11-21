@@ -1,0 +1,201 @@
+{
+  "evaluator_class": "shepherd-merge-classification",
+  "rules": "prompts/pr-shepherd.md clauses; decision function bin/prompt_check.py:decide() (unchanged)",
+  "runs": [
+    {
+      "id": "pa-s01-flaky-runner-died",
+      "evaluator_verdict": "rerun",
+      "correct": true
+    },
+    {
+      "id": "pa-s02-flaky-network-timeout",
+      "evaluator_verdict": "rerun",
+      "correct": true
+    },
+    {
+      "id": "pa-s03-flaky-rate-limit",
+      "evaluator_verdict": "rerun",
+      "correct": true
+    },
+    {
+      "id": "pa-s04-nonworker-branch-lint",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-s05-nonworker-branch-test",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-s06-needs-judgment-scope",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-s07-needs-judgment-cause",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-s08-unstable-preexisting-tracked",
+      "evaluator_verdict": "merge",
+      "correct": true
+    },
+    {
+      "id": "pa-s09-unstable-new-failure",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-s10-unstable-preexisting-untracked",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-s11-cleanbase-reproduces",
+      "evaluator_verdict": "merge",
+      "correct": true
+    },
+    {
+      "id": "pa-s12-cleanbase-clean",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-s13-unstable-develop-type-error",
+      "evaluator_verdict": "merge",
+      "correct": true
+    },
+    {
+      "id": "pa-s14-unstable-repowide-ruff-drift",
+      "evaluator_verdict": "flag",
+      "correct": false
+    },
+    {
+      "id": "pa-p01-flaky-runner-died-paraphrase",
+      "evaluator_verdict": "fix_attempt",
+      "correct": false
+    },
+    {
+      "id": "pa-p02-flaky-network-timeout-paraphrase",
+      "evaluator_verdict": "rerun",
+      "correct": true
+    },
+    {
+      "id": "pa-p03-flaky-rate-limit-paraphrase",
+      "evaluator_verdict": "rerun",
+      "correct": true
+    },
+    {
+      "id": "pa-p04-nonworker-branch-lint-paraphrase",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-p05-nonworker-branch-test-paraphrase",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-p06-needs-judgment-scope-paraphrase",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-p07-needs-judgment-cause-paraphrase",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-p08-unstable-preexisting-tracked-paraphrase",
+      "evaluator_verdict": "merge",
+      "correct": true
+    },
+    {
+      "id": "pa-p09-unstable-new-failure-paraphrase",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-p10-unstable-preexisting-untracked-paraphrase",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-p11-cleanbase-reproduces-paraphrase",
+      "evaluator_verdict": "merge",
+      "correct": true
+    },
+    {
+      "id": "pa-p12-cleanbase-clean-paraphrase",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-p13-unstable-develop-type-error-paraphrase",
+      "evaluator_verdict": "merge",
+      "correct": true
+    },
+    {
+      "id": "pa-p14-unstable-repowide-ruff-drift-paraphrase",
+      "evaluator_verdict": "flag",
+      "correct": false
+    },
+    {
+      "id": "pa-n01-not-flaky-real-failure",
+      "evaluator_verdict": "fix_attempt",
+      "correct": true
+    },
+    {
+      "id": "pa-n02-not-preexisting-new-failure",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-n03-cleanbase-does-not-reproduce",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-n04-cleanbase-also-fails",
+      "evaluator_verdict": "merge",
+      "correct": true
+    },
+    {
+      "id": "pa-n05-not-rate-limit-real-lint",
+      "evaluator_verdict": "fix_attempt",
+      "correct": true
+    },
+    {
+      "id": "pa-c01-clean-base-passes-failure-is-new",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-c02-clean-base-fails-failure-is-preexisting",
+      "evaluator_verdict": "merge",
+      "correct": true
+    },
+    {
+      "id": "pa-c03-clean-base-passes-mechanical-on-worker",
+      "evaluator_verdict": "fix_attempt",
+      "correct": true
+    },
+    {
+      "id": "pa-c04-clean-base-passes-nonworker-branch",
+      "evaluator_verdict": "flag",
+      "correct": true
+    },
+    {
+      "id": "pa-c05-clean-base-fails-only-known-failure",
+      "evaluator_verdict": "merge",
+      "correct": true
+    },
+    {
+      "id": "pa-c06-clean-base-passes-needs-judgment",
+      "evaluator_verdict": "flag",
+      "correct": true
+    }
+  ]
+}
