@@ -106,8 +106,7 @@ class CommentBlock:
         out = []
         for raw in self.lines:
             stripped = raw.strip()
-            if stripped.startswith("#"):
-                stripped = stripped[1:]
+            stripped = stripped.removeprefix("#")
             out.append(stripped.strip())
         return "\n".join(out)
 
@@ -116,8 +115,7 @@ class CommentBlock:
         """The decisive evidence quote: the first non-empty comment line."""
         for raw in self.lines:
             stripped = raw.strip()
-            if stripped.startswith("#"):
-                stripped = stripped[1:]
+            stripped = stripped.removeprefix("#")
             stripped = stripped.strip()
             if stripped:
                 return stripped
@@ -278,7 +276,7 @@ CLASSIFICATION_TABLE = {
         "423:T 436:T 518:T 672:T 705:T 728:T 795:T 951:T 1055:T 1084:T 1115:T "
         "1387:T 1391:T 1518:T 1664:T",
     "bin/delete_comment_phase0.py":
-        "77:K 89:T 169:K 203:T 247:T 251:K 343:K 404:K 439:K 527:K 620:T",
+        "77:K 89:T 167:K 201:T 245:T 249:K 341:K 402:K 437:K 525:K 618:T",
     "bin/dry_run.py": "177:D",
     "bin/edd.py": "299:T",
     "bin/experiments.py":
@@ -451,8 +449,8 @@ KEEP_RULES = (
     (r"\bunits?\b|\bms\b|\bseconds\b|\bbytes\b|\bhz\b", "units"),
     (r"\bsee (?:bin|docs|tests|config|prompts|schemas)/", "pointer to another file"),
     (r"https?://|www\.", "external reference"),
-    (r"\bdo not edit\b|\bdon't edit\b|\bdo not modify\b|\bgenerated\b"
-     r"|\bauto-?generated\b", "generated/do-not-edit marker"),
+    ((r"\bdo not edit\b|\bdon't edit\b|\bdo not modify\b|\bgenerated\b"
+      r"|\bauto-?generated\b"), "generated/do-not-edit marker"),
     (r"\bmust\b|\bnever\b|\binvariant\b|\brequired\b|\bonly if\b", "stated invariant"),
     (r"\bconfig(?:uration)?\b|\bdeployment\.local|\benv(?:ironment)? var",
      "configuration reference"),
@@ -508,17 +506,17 @@ EXCUSE_RULES = (
      "performance excuse"),
     (r"\bbecause (?:it|of) (?:works|is easier)\b", "convenience excuse"),
     (r"\bignore\b|\bskip(?:ping)?\b|\bnot (?:worth|needed)\b", "skip excuse"),
-    (r"\bcareful\b|\bbeware\b|\bwarning\b|\bdanger\b|\btrap\b|\bgotcha\b"
-     r"|\bpitfall\b|\bfragile\b", "hazard warning without a fact"),
+    ((r"\bcareful\b|\bbeware\b|\bwarning\b|\bdanger\b|\btrap\b|\bgotcha\b"
+      r"|\bpitfall\b|\bfragile\b"), "hazard warning without a fact"),
     (r"\bnever\b|\bdon'?t\b|\balways\b", "imperative without a reason"),
     (r"\bcouldn'?t\b|\bcan'?t\b|\bcould not\b|\bcannot\b", "inability excuse"),
     (r"\bunless\b|\bexcept when\b", "exception carve-out"),
 )
 
 TAUTOLOGY_RULES = (
-    (r"\b(increment|decrement|loop over|iterate over|set|assign|call|"
-     r"return|append|print|read|write|open|close|parse|check|create|"
-     r"remove|delete|sort|filter|count)\b", "restates an operation"),
+    ((r"\b(increment|decrement|loop over|iterate over|set|assign|call|"
+      r"return|append|print|read|write|open|close|parse|check|create|"
+      r"remove|delete|sort|filter|count)\b"), "restates an operation"),
     (r"\bthis (?:function|method|loop|block|section|list|dict|file)\b",
      "labels the surrounding code"),
     (r"\bimport\b", "restates an import"),
@@ -531,18 +529,18 @@ CLUSTER_RULES = (
     ("temporary-hack", r"\btemporar(?:y|ily)\b|\bfor now\b|\bquick(?: and dirty)?\b"),
     ("unfinished-work", r"\btodo\b|\bfixme\b|\bxxx\b|\bshould be\b|\bshould have\b"),
     ("uncertainty", r"\bno idea\b|\bdon'?t know\b|\bnot sure\b|\bconfus"),
-    ("apologetic-tone", r"\bugly\b|\bgross\b|\bdirty\b|\bmeh\b|\bugh\b|\bsigh\b"
-     r"|\bsorry\b|\bapolog|\bunfortunately\b|\bbummer\b"),
+    ("apologetic-tone", (r"\bugly\b|\bgross\b|\bdirty\b|\bmeh\b|\bugh\b|\bsigh\b"
+     r"|\bsorry\b|\bapolog|\bunfortunately\b|\bbummer\b")),
     ("bewilderment", r"\bwhy\?|\bweird\b|\bstrange\b|\bodd\b|\bwhat\??"),
     ("duplication", r"\bdup(?:licate|d)\b|\bcopy-?paste\b|\bcopied\b"),
     ("convenience", r"\bjust\b|\beasi(?:er|est)\b|\bsimpl(?:e|est)\b"),
     ("inline-shortcut", r"\binline\b|\bone-?liner\b"),
     ("performance", r"\bperf(?:ormance)?\b|\boptimi[sz]e|\bfast(?:er)?\b"),
-    ("hazard-warning", r"\bcareful\b|\bbeware\b|\bwarning\b|\bdanger\b|\btrap\b"
-     r"|\bgotcha\b|\bpitfall\b|\bfragile\b"),
+    ("hazard-warning", (r"\bcareful\b|\bbeware\b|\bwarning\b|\bdanger\b|\btrap\b"
+     r"|\bgotcha\b|\bpitfall\b|\bfragile\b")),
     ("inability", r"\bcouldn'?t\b|\bcan'?t\b|\bcould not\b|\bcannot\b"),
-    ("keep-the-hack", r"\bleave (?:this|it|that)\b|\bdon'?t touch\b"
-     r"|\bdo not touch\b"),
+    ("keep-the-hack", (r"\bleave (?:this|it|that)\b|\bdon'?t touch\b"
+     r"|\bdo not touch\b")),
     ("skip", r"\bignore\b|\bskip(?:ping)?\b|\bnot (?:worth|needed)\b"),
     ("excuse-marked", r"\bhack|\bwork-?around\b|\bkludge\b"),
 )
