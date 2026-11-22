@@ -55,8 +55,7 @@ def _row(ts, repo, pr, action, outcome="", note=""):
 
 def _write(path: Path, rows: list[dict]) -> str:
     with open(path, "w", encoding="utf-8") as fh:
-        for row in rows:
-            fh.write(json.dumps(row) + "\n")
+        fh.writelines(json.dumps(row) + "\n" for row in rows)
     return str(path)
 
 
