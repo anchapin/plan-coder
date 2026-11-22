@@ -1,8 +1,13 @@
 name: CI
 
 # Continuous integration for plan-coder: the harness regression suite
-# (pytest) plus ruff lint / format checks, run on every push and on every
-# pull request so PRs get a check signal.
+# (pytest) plus ruff lint / format checks, run on every push to main and
+# on every pull request so PRs get a check signal.
+#
+# The push trigger is restricted to main on purpose (#139): a commit on a
+# PR branch already runs once via pull_request, and an unrestricted push
+# trigger ran the same SHA a second time (39% of runs in the 2026-11-20
+# audit were duplicate-SHA reruns).
 #
 # Least privilege: read-only access to the repository contents, no secrets
 # context is referenced anywhere in this workflow, and no operator-private
@@ -10,6 +15,8 @@ name: CI
 # is the only config that exists in a fresh clone).
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 permissions:
