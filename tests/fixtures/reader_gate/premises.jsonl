@@ -1,0 +1,32 @@
+{"premise_id": "p-cheap-01", "summary_id": "run-cheap-01", "claim": "the worker ledger is append-only", "sources": [{"path": "sources/ledger_discipline.md", "quote": "append-only"}]}
+{"premise_id": "p-cheap-02", "summary_id": "run-cheap-02", "claim": "the tier ladder runs cheap -> balanced -> flagship", "sources": [{"path": "sources/tier_ladder.md", "quote": "cheap -> balanced -> flagship"}]}
+{"premise_id": "p-cheap-03", "summary_id": "run-cheap-03", "claim": "the reader gate opens at 5% divergence", "sources": [{"path": "sources/gate_thresholds.md", "quote": "5%"}]}
+{"premise_id": "p-cheap-04", "summary_id": "run-cheap-04", "claim": "needs_operator is a shepherd ledger action", "sources": [{"path": "sources/shepherd_actions.md", "quote": "needs_operator"}]}
+{"premise_id": "p-cheap-05", "summary_id": "run-cheap-05", "claim": "resolve_dispatch picks the model from the tier", "sources": [{"path": "sources/code_layout.py", "quote": "def resolve_dispatch"}]}
+{"premise_id": "p-cheap-06", "summary_id": "run-cheap-06", "claim": "the worker ledger is append-only", "sources": [{"path": "sources/ledger_discipline.md", "quote": "append-only"}]}
+{"premise_id": "p-cheap-07", "summary_id": "run-cheap-07", "claim": "the tier ladder runs cheap -> balanced -> flagship", "sources": [{"path": "sources/tier_ladder.md", "quote": "cheap -> balanced -> flagship"}]}
+{"premise_id": "p-cheap-08", "summary_id": "run-cheap-08", "claim": "the reader gate opens at 5% divergence", "sources": [{"path": "sources/gate_thresholds.md", "quote": "5%"}]}
+{"premise_id": "p-cheap-09", "summary_id": "run-cheap-09", "claim": "needs_operator is a shepherd ledger action", "sources": [{"path": "sources/shepherd_actions.md", "quote": "needs_operator"}]}
+{"premise_id": "p-cheap-10", "summary_id": "run-cheap-10", "claim": "resolve_dispatch picks the model from the tier", "sources": [{"path": "sources/code_layout.py", "quote": "def resolve_dispatch"}]}
+{"premise_id": "p-cheap-11", "summary_id": "run-cheap-11", "claim": "the worker ledger is append-only", "sources": [{"path": "sources/ledger_discipline.md", "quote": ""}], "note": "citation without a quoted anchor"}
+{"premise_id": "p-cheap-12", "summary_id": "run-cheap-12", "claim": "the worker ledger is never rewritten", "sources": [{"path": "sources/legacy_notes.md", "quote": "the ledger is never rewritten", "contradicts": ["the ledger may be rewritten"]}], "decision": "merge", "note": "contradicted by the cited source"}
+{"premise_id": "p-bal-01", "summary_id": "run-bal-01", "claim": "the worker ledger is append-only", "sources": [{"path": "sources/ledger_discipline.md", "quote": "append-only"}]}
+{"premise_id": "p-bal-02", "summary_id": "run-bal-02", "claim": "the tier ladder runs cheap -> balanced -> flagship", "sources": [{"path": "sources/tier_ladder.md", "quote": "cheap -> balanced -> flagship"}]}
+{"premise_id": "p-bal-03", "summary_id": "run-bal-03", "claim": "the reader gate opens at 5% divergence", "sources": [{"path": "sources/gate_thresholds.md", "quote": "5%"}]}
+{"premise_id": "p-bal-04", "summary_id": "run-bal-04", "claim": "needs_operator is a shepherd ledger action", "sources": [{"path": "sources/shepherd_actions.md", "quote": "needs_operator"}]}
+{"premise_id": "p-bal-05", "summary_id": "run-bal-05", "claim": "resolve_dispatch picks the model from the tier", "sources": [{"path": "sources/code_layout.py", "quote": "def resolve_dispatch"}]}
+{"premise_id": "p-bal-06", "summary_id": "run-bal-06", "claim": "the worker ledger is append-only", "sources": [{"path": "sources/ledger_discipline.md", "quote": "append-only"}]}
+{"premise_id": "p-bal-07", "summary_id": "run-bal-07", "claim": "the tier ladder runs cheap -> balanced -> flagship", "sources": [{"path": "sources/tier_ladder.md", "quote": "cheap -> balanced -> flagship"}]}
+{"premise_id": "p-bal-08", "summary_id": "run-bal-08", "claim": "the reader gate opens at 5% divergence", "sources": [{"path": "sources/gate_thresholds.md", "quote": "5%"}]}
+{"premise_id": "p-bal-09", "summary_id": "run-bal-09", "claim": "needs_operator is a shepherd ledger action", "sources": [{"path": "sources/shepherd_actions.md", "quote": "needs_operator"}]}
+{"premise_id": "p-bal-10", "summary_id": "run-bal-10", "claim": "resolve_dispatch picks the model from the tier", "sources": [{"path": "sources/code_layout.py", "quote": "def resolve_dispatch"}]}
+{"premise_id": "p-bal-11", "summary_id": "run-bal-11", "claim": "the worker ledger is append-only", "sources": [{"path": "sources/ledger_discipline.md", "quote": "append-only"}]}
+{"premise_id": "p-bal-12", "summary_id": "run-bal-12", "claim": "the worker ledger is append-only", "sources": [{"path": "sources/does_not_exist.md", "quote": "append-only"}], "note": "cited source missing"}
+{"premise_id": "p-flag-01", "summary_id": "run-flag-01", "claim": "the worker ledger is append-only", "sources": [{"path": "sources/ledger_discipline.md", "quote": "append-only"}]}
+{"premise_id": "p-flag-02", "summary_id": "run-flag-02", "claim": "the tier ladder runs cheap -> balanced -> flagship", "sources": [{"path": "sources/tier_ladder.md", "quote": "cheap -> balanced -> flagship"}]}
+{"premise_id": "p-flag-03", "summary_id": "run-flag-03", "claim": "the reader gate opens at 5% divergence", "sources": [{"path": "sources/gate_thresholds.md", "quote": "5%"}]}
+{"premise_id": "p-flag-04", "summary_id": "run-flag-04", "claim": "needs_operator is a shepherd ledger action", "sources": [{"path": "sources/shepherd_actions.md", "quote": "needs_operator"}]}
+{"premise_id": "p-flag-05", "summary_id": "run-flag-05", "claim": "resolve_dispatch picks the model from the tier", "sources": [{"path": "sources/code_layout.py", "quote": "def resolve_dispatch"}]}
+{"premise_id": "p-flag-06", "summary_id": "run-flag-06", "claim": "the worker ledger is append-only", "sources": [{"path": "sources/ledger_discipline.md", "quote": "append-only"}]}
+{"premise_id": "p-orphan-01", "summary_id": "run-orphan-99", "claim": "the worker ledger is append-only", "sources": [{"path": "sources/ledger_discipline.md", "quote": "append-only"}], "acted_on": true}
+{"premise_id": "p-fail-01", "summary_id": "run-fail-01", "claim": "the tier ladder runs cheap -> balanced -> flagship", "sources": [{"path": "sources/tier_ladder.md", "quote": "cheap -> balanced -> flagship"}]}
