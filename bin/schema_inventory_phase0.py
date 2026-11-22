@@ -95,14 +95,14 @@ def _enclosing_function(tree: ast.AST):
     stack: list[str] = []
 
     class V(ast.NodeVisitor):
-        def visit_FunctionDef(self, node):  # noqa: N802 - ast API
+        def visit_FunctionDef(self, node):
             stack.append(node.name)
             self.generic_visit(node)
             stack.pop()
 
-        visit_AsyncFunctionDef = visit_FunctionDef  # noqa: N815
+        visit_AsyncFunctionDef = visit_FunctionDef
 
-        def visit_Lambda(self, node):  # noqa: N802 - ast API
+        def visit_Lambda(self, node):
             stack.append("<lambda>")
             self.generic_visit(node)
             stack.pop()

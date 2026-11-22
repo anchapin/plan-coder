@@ -214,7 +214,7 @@ class CliTests(unittest.TestCase):
     def test_json_output_is_valid_and_complete(self):
         result = subprocess.run(
             [sys.executable, str(SCRIPT), "--json"],
-            capture_output=True, text=True, cwd=str(REPO))
+            capture_output=True, text=True, cwd=str(REPO), check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         for key in ("census", "inventory", "coverage", "decision",
@@ -226,14 +226,14 @@ class CliTests(unittest.TestCase):
     def test_verify_mode_passes_on_the_current_tree(self):
         result = subprocess.run(
             [sys.executable, str(SCRIPT), "--verify"],
-            capture_output=True, text=True, cwd=str(REPO))
+            capture_output=True, text=True, cwd=str(REPO), check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("BROKEN INVENTORY CLAIMS", result.stderr)
 
     def test_markdown_report_carries_the_table_and_the_headline(self):
         result = subprocess.run(
             [sys.executable, str(SCRIPT)],
-            capture_output=True, text=True, cwd=str(REPO))
+            capture_output=True, text=True, cwd=str(REPO), check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("| artifact | producer (file:line) | format | schema |",
                       result.stdout)
@@ -254,7 +254,7 @@ class PhaseZeroGuardTests(unittest.TestCase):
     def test_the_census_script_writes_nothing_to_the_repo(self):
         before = {p: p.stat().st_mtime for p in REPO.glob("bin/*.py")}
         subprocess.run([sys.executable, str(SCRIPT), "--json"],
-                       capture_output=True, text=True, cwd=str(REPO))
+                       capture_output=True, text=True, cwd=str(REPO), check=False)
         after = {p: p.stat().st_mtime for p in REPO.glob("bin/*.py")}
         self.assertEqual(before, after)
 
