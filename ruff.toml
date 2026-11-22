@@ -144,6 +144,10 @@ select = [
     "EXE001",  # pre-existing on base: shebang without the executable bit
     "S112",    # pre-existing on base: try/except/continue
 ]
+"tests/fixtures/reader_gate/sources/code_layout.py" = [
+    "F821",    # fixture source sample read by the reader-gate tool, not
+               # executed code: PLANS is defined outside the excerpt
+]
 "tests/test_harness.py" = [
     "FURB122", # pre-existing on base: write to a loop variable
     "ISC004",  # pre-existing on base: implicit string concatenation

@@ -847,7 +847,7 @@ def cmd_reader(args) -> int:
     if args.json:
         print(json.dumps(census, indent=1))
         return 0
-    print(f"# Part A -- reader gate census (issue #152 Phase 0)")
+    print("# Part A -- reader gate census (issue #152 Phase 0)")
     print("")
     print(f"ledger: {args.ledger} ({len(ledger_rows)} rows, "
           f"{ledger_skipped} skipped)")

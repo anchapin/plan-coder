@@ -444,7 +444,7 @@ class FixtureCensusTests(unittest.TestCase):
              "--ledger", str(FIXTURES / "worker_ledger.jsonl"),
              "--premises", str(FIXTURES / "premises.jsonl"),
              "--sources-root", str(FIXTURES)],
-            capture_output=True, text=True, cwd=str(REPO))
+            capture_output=True, text=True, cwd=str(REPO), check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         out = result.stdout
         self.assertIn("Table A1", out)
@@ -460,7 +460,7 @@ class FixtureCensusTests(unittest.TestCase):
              "--ledger", str(FIXTURES / "worker_ledger.jsonl"),
              "--premises", str(FIXTURES / "premises.jsonl"),
              "--sources-root", str(FIXTURES), "--json"],
-            capture_output=True, text=True, cwd=str(REPO))
+            capture_output=True, text=True, cwd=str(REPO), check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         self.assertIn("gate", payload)
@@ -475,7 +475,7 @@ class FixtureCensusTests(unittest.TestCase):
             [sys.executable, str(SCRIPT), "multiagent",
              "--ledger", str(FIXTURES / "multiagent_ledger.jsonl"),
              "--json"],
-            capture_output=True, text=True, cwd=str(REPO))
+            capture_output=True, text=True, cwd=str(REPO), check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["dispatches"], 27)
@@ -494,8 +494,9 @@ class CliTests(unittest.TestCase):
     """The tool takes its inputs as arguments; nothing is hard-coded."""
 
     def test_help_lists_both_subcommands(self):
-        result = subprocess.run([sys.executable, str(SCRIPT), "--help"],
-                                capture_output=True, text=True, cwd=str(REPO))
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--help"],
+            capture_output=True, text=True, cwd=str(REPO), check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("reader", result.stdout)
         self.assertIn("multiagent", result.stdout)
@@ -503,14 +504,14 @@ class CliTests(unittest.TestCase):
     def test_reader_requires_a_ledger_argument(self):
         result = subprocess.run(
             [sys.executable, str(SCRIPT), "reader", "--premises", "x.jsonl"],
-            capture_output=True, text=True, cwd=str(REPO))
+            capture_output=True, text=True, cwd=str(REPO), check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("--ledger", result.stderr)
 
     def test_multiagent_requires_a_ledger_argument(self):
         result = subprocess.run(
             [sys.executable, str(SCRIPT), "multiagent"],
-            capture_output=True, text=True, cwd=str(REPO))
+            capture_output=True, text=True, cwd=str(REPO), check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("--ledger", result.stderr)
 
@@ -518,7 +519,7 @@ class CliTests(unittest.TestCase):
         result = subprocess.run(
             [sys.executable, str(SCRIPT), "multiagent",
              "--ledger", str(FIXTURES / "does_not_exist.jsonl")],
-            capture_output=True, text=True, cwd=str(REPO))
+            capture_output=True, text=True, cwd=str(REPO), check=False)
         self.assertEqual(result.returncode, 1)
 
     def test_the_source_never_hard_codes_the_operator_state_dir(self):
@@ -561,7 +562,7 @@ class ReportTests(unittest.TestCase):
              "--ledger", str(FIXTURES / "worker_ledger.jsonl"),
              "--premises", str(FIXTURES / "premises.jsonl"),
              "--sources-root", str(FIXTURES)],
-            capture_output=True, text=True, cwd=str(REPO))
+            capture_output=True, text=True, cwd=str(REPO), check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         for line in result.stdout.splitlines():
             if line.startswith(("| cheap |", "| balanced |", "| flagship |")):
