@@ -46,7 +46,7 @@ import sys
 from collections import Counter, defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from tokeneconomizer_phase0 import (  # noqa: E402  (path bootstrap first)
+from tokeneconomizer_phase0 import (
     FILE_TOOLS,
     edit_touches,
     failure_signature,
