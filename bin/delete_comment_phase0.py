@@ -276,7 +276,7 @@ CLASSIFICATION_TABLE = {
         "423:T 436:T 518:T 672:T 705:T 728:T 795:T 951:T 1055:T 1084:T 1115:T "
         "1387:T 1391:T 1518:T 1664:T",
     "bin/delete_comment_phase0.py":
-        "77:K 89:T 167:K 201:T 245:T 249:K 341:K 402:K 437:K 525:K 618:T",
+        "77:K 89:T 167:K 201:T 245:T 249:K 342:K 403:K 438:K 526:K 619:T",
     "bin/dry_run.py": "177:D",
     "bin/edd.py": "299:T",
     "bin/experiments.py":
@@ -312,6 +312,7 @@ CLASSIFICATION_TABLE = {
         "633:E 639:T 665:T 843:T 885:T 917:T 940:T",
     "bin/read_guard_phase0.py": "45:K 48:K 122:D 132:K",
     "bin/receipt.py": "120:K",
+    "bin/samesig_phase0.py": "60:T 94:T 103:T 176:T 382:T 522:T",
     "bin/state_write.py": "92:T",
     "bin/structural_discovery_phase0.py":
         "78:K 98:T 135:T 142:K 165:T 297:T 407:T 429:T 569:D 613:T 672:T "
