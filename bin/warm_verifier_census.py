@@ -531,23 +531,35 @@ def definitions():
         ],
         "step_precedence": list(BUCKETS),
         "notes": [
-            "A step that matches no pattern lands in `other`; it is never "
-            "folded into cold start.",
-            "The cold-start bucket carries the issue's 'run start -> first "
-            "non-setup action' interval; leading setup steps are inside "
-            "that interval, so only later setup steps are added on top.",
-            "A step's duration is agent.py's duration_ms (chat round + tool "
-            "execution), so the LLM turn of a setup step is charged to "
-            "cold start.",
-            "Cold-start share is computed against the run's full "
-            "wall-clock; `unattributed_seconds` is the slack between the "
-            "wall-clock and the four buckets.",
-            "A verifier type seen only inside a setup command (e.g. "
-            "`pip install pytest`) still marks the run as that type, so "
-            "its cold start is attributed to that type.",
-            "Generic test runners that are not python (make test, ctest, "
-            "npm test, go test) belong to no verifier type in Phase 0; "
-            "they land in `other`.",
+            (
+                "A step that matches no pattern lands in `other`; it is never "
+                "folded into cold start."
+            ),
+            (
+                "The cold-start bucket carries the issue's 'run start -> first "
+                "non-setup action' interval; leading setup steps are inside "
+                "that interval, so only later setup steps are added on top."
+            ),
+            (
+                "A step's duration is agent.py's duration_ms (chat round + tool "
+                "execution), so the LLM turn of a setup step is charged to "
+                "cold start."
+            ),
+            (
+                "Cold-start share is computed against the run's full "
+                "wall-clock; `unattributed_seconds` is the slack between the "
+                "wall-clock and the four buckets."
+            ),
+            (
+                "A verifier type seen only inside a setup command (e.g. "
+                "`pip install pytest`) still marks the run as that type, so "
+                "its cold start is attributed to that type."
+            ),
+            (
+                "Generic test runners that are not python (make test, ctest, "
+                "npm test, go test) belong to no verifier type in Phase 0; "
+                "they land in `other`."
+            ),
         ],
     }
 
@@ -628,12 +640,16 @@ def render_text(report):
     totals = report["totals"]
     lines = [
         "warm-verifier cold-start census (issue #154, Phase 0)",
-        f"window: {window['since']} .. {window['until']} "
-        f"({window['weeks']} weeks, source={window['source']})",
-        f"runs: {totals['runs']} (corpus {totals['runs_in_corpus']}), "
-        f"wall-clock {totals['wall_clock_seconds']}s, cold start "
-        f"{totals['cold_start_seconds']}s "
-        f"({totals['cold_start_share_pct']}%)",
+        (
+            f"window: {window['since']} .. {window['until']} "
+            f"({window['weeks']} weeks, source={window['source']})"
+        ),
+        (
+            f"runs: {totals['runs']} (corpus {totals['runs_in_corpus']}), "
+            f"wall-clock {totals['wall_clock_seconds']}s, cold start "
+            f"{totals['cold_start_seconds']}s "
+            f"({totals['cold_start_share_pct']}%)"
+        ),
         "",
         "| verifier type | runs | runs/week | wall-clock s | cold start s | cold start % |",
         "|---|---|---|---|---|---|",
