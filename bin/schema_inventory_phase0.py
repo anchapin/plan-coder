@@ -65,6 +65,7 @@ import sys
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SELF = "bin/schema_inventory_phase0.py"
 SELF_TEST = "tests/test_schema_inventory_phase0.py"
+SELF_REPORT = "docs/andon-f3-schema-phase0-report.md"
 
 CENSUS_PATTERNS = [
     ("P1", "open(path, mode) with mode in w/a/x/+",
@@ -703,7 +704,7 @@ def not_found_rows(root: str = REPO_ROOT) -> list[dict]:
                     if not name.endswith((".py", ".md", ".json", ".jsonl")):
                         continue
                     rel = os.path.relpath(os.path.join(dirpath, name), root)
-                    if rel in (SELF, SELF_TEST):   # never count our own files
+                    if rel in (SELF, SELF_TEST, SELF_REPORT):
                         continue
                     try:
                         with open(os.path.join(dirpath, name), encoding="utf-8",

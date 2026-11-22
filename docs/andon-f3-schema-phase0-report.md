@@ -91,4 +91,10 @@ comment block in new files. Supervisor fallout at collection: removed the new
 script's standalone comment-banner blocks (the census failure; the
 schema_kind explanation they carried is folded into this report's method
 paragraph), re-ran the script (identical coverage output), and authored this
-report from the script's JSON output.
+report from the script's JSON output. A second fallout fix followed from the
+JiTTest check on the opened PR: the not-found grep counted this report itself
+(it names the searched families), so the shipped NotFound test failed on the
+PR tree (claimlink hits 3, flight-deck 6). The script now also excludes its
+own report file (SELF_REPORT, same mechanism as SELF/SELF_TEST); re-run on
+the PR tree gives claimlink 0 / flight-deck 4 / dispatch 0, exactly as this
+report states, and the 41-test combined run passes.
