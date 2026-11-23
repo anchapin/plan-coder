@@ -909,6 +909,13 @@ class _ProviderExhausted(RuntimeError):
     """A provider stayed rate/quota-limited through all polite retries."""
 
 
+class _ProviderUnavailable(RuntimeError):
+    """A provider stayed unreachable through all polite retries: read
+    timeouts, transient transport errors, or 5xx responses. Unlike a
+    credential or config problem this is scarcity-shaped, so chat()
+    fails over on it: the next provider may well answer."""
+
+
 class _WorkerAborted(RuntimeError):
     """The model loop aborted (all providers exhausted)."""
 
@@ -975,12 +982,14 @@ def _read_response(resp, mode: str) -> dict:
 
 def chat_once(provider: dict, model: str, messages: list, tools: list) -> dict:
     """Try one provider with polite backoff. Raises _ProviderExhausted when
-    it stays limited; RuntimeError for credential/config problems."""
+    it stays limited, _ProviderUnavailable when it stays unreachable;
+    RuntimeError for credential/config problems."""
     payload = json.dumps(
         {"model": model, "messages": messages, "tools": tools, "tool_choice": "auto"}
     ).encode()
     last_err: Exception | None = None
     limited = False
+    timeouts = 0
     for attempt in range(6):
         req = urllib.request.Request(
             provider["chat_url"], data=payload, method="POST",
@@ -1008,20 +1017,34 @@ def chat_once(provider: dict, model: str, messages: list, tools: list) -> dict:
             raise RuntimeError(f"model call failed: HTTP {exc.code}")
         except Exception as exc:  # noqa: BLE001 - retry transient failures
             last_err = exc
+            if isinstance(exc, TimeoutError):
+                # A hung read gains little from hammering the same
+                # provider: each attempt can sit out the full socket
+                # timeout, so six of them burned ~12 minutes before the
+                # run aborted (home-energy-twin #12/#28, 2026-11-22).
+                # Two timeouts and this provider is done; chat() fails
+                # over to the next one instead.
+                timeouts += 1
+                if timeouts >= 2:
+                    raise _ProviderUnavailable(
+                        f"read timed out {timeouts}x: {exc}") from exc
             time.sleep(5 * (attempt + 1))
     if limited:
         raise _ProviderExhausted(f"still limited after retries: {last_err}")
-    raise RuntimeError(f"model call failed after retries: {last_err}")
+    raise _ProviderUnavailable(f"unreachable after retries: {last_err}")
 
 
 def chat(chain: list, messages: list, tools: list) -> tuple:
     """Try each (name, provider, model) in priority order, failing over to
-    the next when one is quota/rate-limited. Returns (data, name, model)."""
+    the next when one is quota/rate-limited or unreachable. Returns
+    (data, name, model). Credential/config errors fail fast instead:
+    they would fail identically on the fallback and must not burn its
+    quota."""
     problems = []
     for name, provider, model in chain:
         try:
             return chat_once(provider, model, messages, tools), name, model
-        except _ProviderExhausted as exc:
+        except (_ProviderExhausted, _ProviderUnavailable) as exc:
             problems.append(f"{name}: {exc}")
     raise RuntimeError("all providers exhausted: " + "; ".join(problems))
 
