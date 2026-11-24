@@ -67,10 +67,10 @@ import os
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from trace_summary import _load_deployment_config, default_ledger_path  # noqa: E402
+from trace_summary import _load_deployment_config, default_ledger_path
 
 CLASSES = ("ci-none", "ci-reds", "ci-unclassified", "workflow-kind",
            "security-scan", "conflict-stale", "physics-gate",
@@ -82,7 +82,7 @@ PHYSICS_PATHS = ("src/physics/", "src/sim/", "physics/", "ashrae",
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def load_config(explicit):
@@ -136,19 +136,43 @@ def _real_checks(checks):
             if (c.get("conclusion") or "") not in ("", "SKIPPED")]
 
 
+UNNAMED_FAILING = "(unnamed failing check)"
+
+
 def failing_names(checks):
+    """Names of FAILURE-conclusion checks, deduped. A failing
+    check with an empty name is kept as UNNAMED_FAILING: dropping
+    it would let ci-reds / held-green claim "no failing checks" /
+    "all checks green" over a rollup that contains a FAILURE
+    (#163 A07)."""
     seen, out = set(), []
     for c in checks:
         if c.get("conclusion") == "FAILURE":
-            name = str(c.get("name") or "")
-            if name and name not in seen:
+            name = str(c.get("name") or "") or UNNAMED_FAILING
+            if name not in seen:
                 seen.add(name)
                 out.append(name)
     return out
 
 
 def exempt_match(name, patterns):
-    return any(p.lower() in name.lower() for p in patterns)
+    """An exempt pattern matches a check name only as the whole
+    name or as a prefix that ends at a separator: the approved
+    shapes are the gate name itself and the gate name plus a
+    suffix such as " (Issue #1333)". A pattern must never match
+    mid-token — "ASHRAE 140 Strict Energy Gate" does not exempt
+    "ASHRAE 140 Strict Energy Gatekeeper (experimental)"
+    (#163 A01, the false-exempt absolute bar)."""
+    n = name.lower()
+    for p in patterns:
+        pat = p.lower()
+        if n == pat:
+            return True
+        if n.startswith(pat):
+            rest = n[len(pat):]
+            if rest and not rest[0].isalnum() and rest[0] != "_":
+                return True
+    return False
 
 
 def workflow_kind(workflow_diff):
@@ -165,7 +189,7 @@ def workflow_kind(workflow_diff):
             content.append(line[1:])
     if not content:
         return "none"
-    if all(COUNT_LINE_RE.search(l) for l in content):
+    if all(COUNT_LINE_RE.search(line) for line in content):
         return "count_only"
     return "substantive"
 
@@ -255,6 +279,17 @@ def evaluate(facts, policy, resolutions):
                 "evidence": "workflow files touched (" +
                             ", ".join(wfiles) + "), changed lines are "
                             "expected-test-count only (routine class)"}
+        elif kind == "none":
+            # The diff carries no changed lines, so the kind
+            # cannot be determined. Report that honestly instead
+            # of folding "none" into the substantive branch and
+            # asserting changed lines that do not exist (#163 A06).
+            classes["workflow-kind"] = {
+                "state": "unverifiable",
+                "evidence": "workflow files touched (" +
+                            ", ".join(wfiles) + "), but the workflow "
+                            "diff carries no changed lines — kind "
+                            "cannot be determined"}
         else:
             classes["workflow-kind"] = {
                 "state": "unresolved",
@@ -329,7 +364,7 @@ def gh_facts(repo, pr):
     p = subprocess.run(
         ["gh", "pr", "view", str(pr), "--repo", repo, "--json",
          "statusCheckRollup,mergeable,files,closingIssuesReferences"],
-        capture_output=True, text=True, timeout=60)
+        capture_output=True, text=True, timeout=60, check=False)
     d = json.loads(p.stdout)
     checks = [{"name": c.get("name"), "conclusion": c.get("conclusion"),
                "status": c.get("status"),
@@ -340,7 +375,8 @@ def gh_facts(repo, pr):
     wdiff = ""
     if wfiles:
         p2 = subprocess.run(["gh", "pr", "diff", str(pr), "--repo", repo],
-                            capture_output=True, text=True, timeout=60)
+                            capture_output=True, text=True, timeout=60,
+                            check=False)
         keep, cur = [], False
         for line in p2.stdout.split("\n"):
             if line.startswith("diff --git"):
