@@ -53,6 +53,11 @@ class SlotsCase(unittest.TestCase):
             (tdir / "blob").write_bytes(b"x" * target_bytes)
         return wt
 
+    def make_artifact_dir(self, wt, dirname, nbytes):
+        adir = wt / dirname
+        adir.mkdir()
+        (adir / "blob").write_bytes(b"x" * nbytes)
+
     def test_check_disabled_exits_2(self):
         cfg = make_config(self.tmp, enabled=False)
         r = self.run_cli("check", "--repo", "alpha", config=cfg)
@@ -74,7 +79,7 @@ class SlotsCase(unittest.TestCase):
                          "--json")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         slot = json.loads(r.stdout)
-        self.assertEqual(slot["target_bytes"], 1234)
+        self.assertEqual(slot["artifact_bytes"], 1234)
         self.assertEqual(slot["base_sha"], "abc123")
         r = self.run_cli("lookup", "--repo", "alpha", "--issue", "7",
                          "--json")
@@ -82,6 +87,17 @@ class SlotsCase(unittest.TestCase):
         out = json.loads(r.stdout)
         self.assertTrue(out["found"])
         self.assertEqual(out["slot"]["worktree"], str(wt))
+
+    def test_record_counts_node_and_python_artifacts(self):
+        wt = self.make_worktree_dir("alpha-worker-11")
+        self.make_artifact_dir(wt, "node_modules", 100)
+        self.make_artifact_dir(wt, ".venv", 23)
+        r = self.run_cli("record", "--repo", "alpha", "--issue", "11",
+                         "--worktree", str(wt), "--base-sha", "abc123",
+                         "--json")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        slot = json.loads(r.stdout)
+        self.assertEqual(slot["artifact_bytes"], 123)
 
     def test_lookup_no_slot(self):
         r = self.run_cli("lookup", "--repo", "alpha", "--issue", "99",

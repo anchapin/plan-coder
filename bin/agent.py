@@ -21,6 +21,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -199,6 +200,10 @@ Rules:
 - Run the test commands from the brief (or the repo's obvious test command)
   before finishing. Fix failures you introduced.
 - Do NOT commit, merge, or push. Leave changes uncommitted.
+- A mechanical command guard may deny a shell command that touches
+  secrets, mutates GitHub state, or deletes outside the work area
+  (denials start with `exec_denied:` and name the allowed alternative).
+  Follow the alternative; do not rephrase the same command to evade it.
 - Do NOT ask the user questions; make reasonable choices and note them.
 - When done (or stuck), write a final summary: what changed, test results,
   and anything you could not resolve.
@@ -615,11 +620,221 @@ def _redact(text: str) -> str:
     return _SECRET_SHAPE.sub("***", text)
 
 
+# ---------------------------------------------------------------------------
+# Exec guard (exec-guard spike, Phase 1 built 2026-11-10; brief:
+# your_files/exec-guard-spike-brief.md, Phase 0: exec-guard-phase0/).
+# Every worker shell command passes through Worker._exec; historically it
+# ran with shell=True, no denylist, and env=dict(os.environ) — in env-key
+# auth mode that hands the provider keys to any shell the model spawns,
+# and _safe() never applied because a command has no single path to check.
+# Part A (env scrub): the shell subprocess gets a baseline environment,
+# never the process environment; secret-shaped names and every provider's
+# configured env_key are stripped. The strip set is DERIVED from PROVIDERS
+# at call time so a future provider is covered automatically.
+# Part B (scoped denylist): positive-match-only rules, re-scoped by the
+# Phase 0 replay over 19,776 recorded commands (0 denies on pr_opened runs
+# is the bar the rule set was fitted to). env-dump and broad filesystem
+# scans are deliberately NOT rules: the corpus showed both are load-bearing
+# worker behaviour, and Part A removes what an env dump could leak.
+# Policy lives in deployment config workers.exec_guard; ships disabled.
+# scrub_always runs Part A even while Part B is disabled. With both off,
+# _exec behaves byte-identically to the pre-guard code.
+_EXEC_GUARD_BASELINE = ("PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE",
+                        "TERM", "TMPDIR", "USER", "SHELL")
+_EXEC_GUARD_STRIP = re.compile(r"KEY|TOKEN|SECRET|PASSWORD|AUTH|CREDENTIAL")
+_EXEC_GUARD_HEREDOC = re.compile(r"<<-?\s*'?\"?([A-Za-z_][A-Za-z0-9_]*)'?\"?")
+
+
+def _exec_guard_cfg() -> dict:
+    cfg = _cfg("workers", "exec_guard", default={})
+    return cfg if isinstance(cfg, dict) else {}
+
+
+def _exec_guard_enabled() -> bool:
+    return bool(_exec_guard_cfg().get("enabled", False))
+
+
+def _exec_guard_strip_names() -> set:
+    names = {p["env_key"] for p in PROVIDERS.values() if p.get("env_key")}
+    for name in _exec_guard_cfg().get("strip_extra", []) or []:
+        names.add(str(name))
+    return names
+
+
+def exec_guard_env() -> dict:
+    """Baseline + explicit pass-through environment for worker shells."""
+    strip = _exec_guard_strip_names()
+    env: dict = {}
+    for name in _EXEC_GUARD_BASELINE:
+        if name in os.environ:
+            env[name] = os.environ[name]
+    for name in _exec_guard_cfg().get("passthrough", []) or []:
+        name = str(name)
+        if (name in os.environ and name not in strip
+                and not _EXEC_GUARD_STRIP.search(name)):
+            env[name] = os.environ[name]
+    # Worker shells are non-interactive (~/.profile never sourced): the
+    # cargo and ~/.local/bin dirs would be missing from PATH. Phase 0
+    # showed repeated `find / -name uv` hunts caused by the second one.
+    path = env.get("PATH", "")
+    parts = path.split(os.pathsep) if path else []
+    for extra in (os.path.expanduser("~/.local/bin"),
+                  os.path.expanduser("~/.cargo/bin")):
+        if extra not in parts:
+            parts.insert(0, extra)
+    env["PATH"] = os.pathsep.join(parts)
+    return env
+
+
+def _exec_guard_segments(command: str):
+    """Split a shell string into argv segments on top-level operators.
+    Returns (segments, unparsed). Heredoc bodies are data, not segments.
+    Unparseable commands are allowed by the caller (fail-open on parse,
+    fail-closed on match) and counted via the result taxonomy."""
+    lines = command.split("\n")
+    kept, i = [], 0
+    while i < len(lines):
+        kept.append(lines[i])
+        m = _EXEC_GUARD_HEREDOC.search(lines[i])
+        if m:
+            delim = m.group(1)
+            i += 1
+            while i < len(lines) and lines[i].strip() != delim:
+                i += 1
+            if i < len(lines):
+                kept.append(lines[i])
+        i += 1
+    try:
+        lex = shlex.shlex("\n".join(kept), posix=True,
+                          punctuation_chars="|&;")
+        lex.whitespace_split = True
+        lex.commenters = ""
+        toks = list(lex)
+    except ValueError:
+        return None, True
+    segs, cur = [], []
+    for tok in toks:
+        if tok in ("|", "||", "&&", ";", "&"):
+            if cur:
+                segs.append(cur)
+            cur = []
+        else:
+            cur.append(tok)
+    if cur:
+        segs.append(cur)
+    return segs, False
+
+
+def _exec_guard_resolve(target: str, cwd: str) -> str:
+    if target.startswith("~"):
+        target = os.path.expanduser("~") + target[1:]
+    target = target.replace("$HOME", os.path.expanduser("~"))
+    if not os.path.isabs(target):
+        target = os.path.join(cwd, target)
+    return os.path.realpath(target)
+
+
+_EXEC_GUARD_READ_HEADS = {"cat", "head", "tail", "less", "more", "grep",
+                          "egrep", "fgrep", "sed", "awk", "cp", "source", "."}
+_EXEC_GUARD_GH_MUTATE = {("pr", "merge"), ("workflow", "run"),
+                         ("workflow", "enable"), ("workflow", "disable"),
+                         ("run", "rerun"), ("run", "cancel"),
+                         ("release", "create"), ("release", "delete"),
+                         ("secret", "set"), ("secret", "delete"),
+                         ("repo", "delete")}
+_EXEC_GUARD_SENSITIVE = ("token-plan-coding-manager-setup",
+                         "plan-coder-repo", "/.ssh", "/.aws", "/.gnupg",
+                         "custom-connectors")
+
+
+def exec_guard_check(command: str, workdir: str):
+    """Return the denied rule name, or None when the command is allowed.
+    Positive-match only; an unparseable command returns None here and is
+    surfaced by the caller through the exec_guard:unparsed taxonomy when
+    it needs counting — the guard never kills a run over a parse edge."""
+    segs, unparsed = _exec_guard_segments(command)
+    if unparsed or not segs:
+        return None
+    home = os.path.expanduser("~")
+    cwd = workdir
+
+    def in_scope(path: str) -> bool:
+        return (path.startswith("/tmp/") or path == "/tmp"
+                or path.startswith("/var/tmp/")
+                or path == workdir or path.startswith(workdir + os.sep))
+
+    for argv in segs:
+        if not argv:
+            continue
+        if argv[0] == "cd" and len(argv) >= 2:
+            cwd = _exec_guard_resolve(argv[1], cwd)
+            continue
+        head = os.path.basename(argv[0])
+        rest = argv[1:]
+        if head == "sudo":
+            return "sudo"
+        if head == "rm":
+            flags = "".join(a.lstrip("-") for a in rest
+                            if a.startswith("-"))
+            if "r" in flags and "f" in flags:
+                caches = (home + "/.cache", home + "/.npm")
+                for target in (a for a in rest if not a.startswith("-")):
+                    if target.rstrip("/") in ("/tmp/*", "/*", "~/*",
+                                               "/var/tmp/*"):
+                        return "rm-outside-worktree"
+                    rp = _exec_guard_resolve(target, cwd)
+                    if any(rp == c or rp.startswith(c + os.sep)
+                           for c in caches):
+                        continue
+                    if rp in ("/", home) or rp == workdir:
+                        return "rm-outside-worktree"
+                    if not in_scope(rp):
+                        return "rm-outside-worktree"
+        if head == "git" and rest[:1] == ["push"]:
+            return "git-push"
+        if head == "gh" and tuple(rest[:2]) in _EXEC_GUARD_GH_MUTATE:
+            return "gh-mutate"
+        if head in _EXEC_GUARD_READ_HEADS:
+            for a in rest:
+                base = os.path.basename(a)
+                if base == ".env" or (base.startswith(".env.")
+                                      and base != ".env.example"):
+                    return "dotenv-read"
+        if head == "find" and rest:
+            roots = [x for x in rest if not x.startswith("-")]
+            if roots:
+                rp = _exec_guard_resolve(roots[0], cwd)
+                if (any(s in rp for s in _EXEC_GUARD_SENSITIVE)
+                        and not in_scope(rp)):
+                    return "fs-scan"
+    if re.search(r"(curl|wget)[^&;]*\|\s*(sudo\s+)?(ba|z)?sh\b", command):
+        return "curl-pipe-sh"
+    return None
+
+
+_EXEC_GUARD_ALTERNATIVES = {
+    "sudo": "run it without sudo — workers have no sudo by design",
+    "rm-outside-worktree": "delete only inside the workdir, /tmp, "
+                           "/var/tmp, or tool caches (~/.cache, ~/.npm)",
+    "dotenv-read": "read .env.example instead — real .env files are secrets",
+    "git-push": "workers never push; leave changes uncommitted for the "
+                "supervisor",
+    "gh-mutate": "read-only gh only; merges and mutations are the "
+                 "shepherd's job",
+    "curl-pipe-sh": "download to a file first, inspect it, then run it",
+    "fs-scan": "search inside the workdir; harness state and credential "
+               "paths are off limits",
+}
+
+
 def _tool_result_kind(result: str) -> str:
     """Typed tool-error taxonomy (harness-tune 2026-10-25, ideas brief
     T2): a small closed vocabulary recorded alongside the raw result
     string, never instead of it, so failure modes are countable
     without breaking grep-based transcript review."""
+    if result.startswith("tool error: exec_denied:"):
+        rule = result[len("tool error: exec_denied:"):].split(":", 1)[0].strip()
+        return f"exec_denied:{rule}" if rule else "exec_denied"
     if result.startswith("TIMEOUT after"):
         return "exec_timeout"
     if result.startswith("exit="):
@@ -638,7 +853,8 @@ def _tool_result_kind(result: str) -> str:
 def _machine_manifest(workdir: str, base: str | None, gate_triggers: int,
                       midrun_triggers: int = 0,
                       token_cap: tuple | None = None,
-                      stored_output: bool = False) -> str:
+                      stored_output: bool = False,
+                      exec_denied: int = 0) -> str:
     """Harness-generated git facts for the supervisor to verify.
     Never model prose: unreadable facts degrade to status unknown with a
     named blocker instead of a fabricated 'ready'."""
@@ -677,7 +893,8 @@ def _machine_manifest(workdir: str, base: str | None, gate_triggers: int,
             lines.append(stat)
             lines.append("```")
     lines.append(f"- gate_triggers: empty_diff={gate_triggers}, "
-                 f"midrun_no_edit={midrun_triggers}")
+                 f"midrun_no_edit={midrun_triggers}, "
+                 f"exec_denied={exec_denied}")
     lines.append(f"- stored_output: {'on' if stored_output else 'off'} "
                  "(Context Mode: raw tool output stored + ctx_read)")
     if token_cap is not None:
@@ -699,6 +916,7 @@ class Worker:
         # their raw output on disk and return a capped summary + handle;
         # ctx_read puts the raw output back into the context on demand.
         self.ctx_store = ctx_store
+        self.exec_denied_count = 0
         # Native code map (issue #80): when an index is attached,
         # code_query answers questions about the worktree's symbols.
         self.codemap = codemap
@@ -735,13 +953,28 @@ class Worker:
 
     def _exec(self, command: str, timeout: int) -> str:
         self.commands.append(command)
-        # Worker shells are non-interactive: ~/.profile is never sourced,
-        # so the cargo bin dir (and similar) would be missing from PATH.
-        # Set it explicitly — Rust workers need cargo for build/test.
-        env = dict(os.environ)
-        cargo_bin = os.path.expanduser("~/.cargo/bin")
-        if cargo_bin not in env.get("PATH", "").split(os.pathsep):
-            env["PATH"] = cargo_bin + os.pathsep + env.get("PATH", "")
+        guard_cfg = _exec_guard_cfg()
+        if guard_cfg.get("enabled", False):
+            rule = exec_guard_check(command, self.workdir)
+            if rule:
+                self.exec_denied_count += 1
+                alt = _EXEC_GUARD_ALTERNATIVES.get(rule, "use another way")
+                return (f"tool error: exec_denied:{rule}: command denied "
+                        f"by the exec guard ({rule}); instead: {alt}. "
+                        f"Do not rephrase the same command to evade it.")
+        if guard_cfg.get("enabled", False) or guard_cfg.get(
+                "scrub_always", False):
+            env = exec_guard_env()
+        else:
+            # Pre-guard behaviour, unchanged while the spike is disabled.
+            # Worker shells are non-interactive: ~/.profile is never
+            # sourced, so the cargo bin dir (and similar) would be
+            # missing from PATH. Set it explicitly — Rust workers need
+            # cargo for build/test.
+            env = dict(os.environ)
+            cargo_bin = os.path.expanduser("~/.cargo/bin")
+            if cargo_bin not in env.get("PATH", "").split(os.pathsep):
+                env["PATH"] = cargo_bin + os.pathsep + env.get("PATH", "")
         try:
             proc = subprocess.run(
                 command, shell=True, cwd=self.workdir, timeout=timeout,
@@ -1338,7 +1571,8 @@ def main() -> int:
                             midrun_triggers,
                             token_cap=((total_out, max_tokens_out)
                                      if max_tokens_out else None),
-                            stored_output=stored_output)
+                            stored_output=stored_output,
+                            exec_denied=worker.exec_denied_count)
         + "\n"
     )
     with open(os.path.join(workdir, "WORKER_REPORT.md"), "w", encoding="utf-8") as fh:
@@ -1350,6 +1584,7 @@ def main() -> int:
           "commands_run": len(worker.commands),
           "gate_triggers": gate_triggers,
           "midrun_gate_triggers": midrun_triggers,
+          "exec_denied": worker.exec_denied_count,
           "token_cap": token_cap_tripped,
           "max_tokens_out": max_tokens_out,
           "stored_output": stored_output,
