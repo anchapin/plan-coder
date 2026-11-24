@@ -509,8 +509,14 @@ NOT_FOUND = [
     {
         "name": "claimlink ledger rows",
         "grep": "claimlink|claim_link",
-        "scope": "bin/, prompts/, docs/, schemas/, tests/",
-        "note": "no producer, no reader and no test anywhere in the repo",
+        "scope": "bin/, prompts/, schemas/, tests/",
+        "expected_path": "bin/claimlink.py",
+        "note": "no producer, no reader and no test in the repo's code: "
+                "the claimlink ledger is written by the live harness into "
+                "its state dir, outside this published tree. Docs may name "
+                "claimlink_ledger.jsonl as one of those state-dir ledgers; "
+                "a mention is not a producer, so docs/ is outside this "
+                "row's grep scope",
     },
     {
         "name": "flight-deck inputs",
