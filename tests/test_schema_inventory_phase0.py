@@ -200,8 +200,17 @@ class NotFoundTests(unittest.TestCase):
         self.assertIn("flight-deck", names)
 
     def test_claimlink_has_no_producer_in_the_repo(self):
+        # Premise updated 2026-11-24: the census greps code scope only
+        # (bin/, prompts/, schemas/, tests/). A docs mention of
+        # claimlink_ledger.jsonl (e.g. the assurance-receipts Phase 0
+        # report naming it as a state-dir ledger) is not a producer and
+        # no longer counts against this row.
         row = next(r for r in self.rows if "claimlink" in r["name"])
         self.assertEqual(row["hits"], 0)
+
+    def test_claimlink_producer_path_is_absent(self):
+        row = next(r for r in self.rows if "claimlink" in r["name"])
+        self.assertFalse(row["expected_path_exists"])
 
     def test_flight_deck_named_path_is_absent(self):
         row = next(r for r in self.rows if "flight-deck" in r["name"])
