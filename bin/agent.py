@@ -879,9 +879,9 @@ def _exec_guard_looks_like_path(piece: str) -> bool:
         return False
     if "://" in piece:  # a URL, not a path
         return False
-    if piece.startswith("$HOME") or piece.startswith("${HOME}"):
+    if piece.startswith(("$HOME", "${HOME}")):
         return True
-    if piece.startswith("/") or piece.startswith("~"):
+    if piece.startswith(("/", "~")):
         return True
     if piece == "..":
         return True
