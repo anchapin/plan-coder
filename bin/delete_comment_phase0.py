@@ -261,10 +261,11 @@ def census(repo_root: str = REPO_ROOT, pattern: str = DEFAULT_GLOB) -> list:
 # ledger records which path classified each block (``method``).
 CLASSIFICATION_TABLE = {
     "bin/agent.py":
-        "76:K 102:D 132:K 139:K 142:K 300:K 315:D 319:D 322:K 327:D 377:K 567:K 577:D "
-        "587:K 625:K 731:D 769:T 773:T 809:D 845:D 914:D 936:D 952:D 977:D 987:D "
-        "1007:D 1118:T 1129:D 1135:D 1204:K 1225:K 1243:T 1257:K 1276:K 1289:K 1315:K "
-        "1322:T 1342:D 1411:K 1424:T 1437:T 1471:K ",
+        "77:K 103:D 133:K 140:K 143:K 301:K 316:D 320:D 323:K 328:D 378:K 568:K 578:D "
+        "588:K 626:K 732:D 762:K 798:K 813:K 823:K 869:D 940:D 972:T 976:T 979:K 1017:K "
+        "1055:D 1062:K 1097:D 1166:D 1188:D 1204:D 1229:D 1239:D 1259:D 1370:T 1381:D "
+        "1387:D 1456:K 1477:K 1495:T 1509:K 1528:K 1541:K 1570:K 1577:T 1597:D 1666:K "
+        "1679:T 1692:T 1726:K ",
     "bin/ast_grep_phase0_scan.py": "52:K 76:T 97:T 115:D 133:K",
     "bin/attention.py": "92:T 151:T 209:T 305:K 314:T 415:T",
     "bin/codemap.py":
@@ -276,7 +277,7 @@ CLASSIFICATION_TABLE = {
         "423:T 436:T 518:T 672:T 705:T 728:T 795:T 951:T 1055:T 1084:T 1115:T "
         "1387:T 1391:T 1518:T 1664:T",
     "bin/delete_comment_phase0.py":
-        "77:K 89:T 167:K 201:T 245:T 249:K 342:K 403:K 438:K 526:K 619:T",
+        "77:K 89:T 167:K 201:T 245:T 249:K 343:K 404:K 439:K 527:K 620:T",
     "bin/dry_run.py": "177:D",
     "bin/edd.py": "299:T",
     "bin/experiments.py":

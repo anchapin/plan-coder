@@ -21,6 +21,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -758,10 +759,212 @@ def _machine_manifest(workdir: str, base: str | None, gate_triggers: int,
     return "\n".join(lines)
 
 
+# --- exec guard ------------------------------------------------------------
+# The exec guard is a HARNESS-side check on the command STRING a worker
+# asked to run, applied BEFORE the shell runs it.  It is a coarse filter,
+# not a sandbox; this comment is the contract (issue #170).
+#
+# What the guard DOES block, when workers.exec_guard.enabled is true:
+#   * Part B (scoped deny list): a command that names a path outside the
+#     worktree -- an absolute path, a "~" home reference, or a "../"
+#     escape -- is refused.  The command never runs and the tool result
+#     carries "[exec-guard] BLOCKED".  The system tool directories
+#     (/bin, /usr/bin, ...), the standard streams under /dev and the
+#     operator's allow_paths are exempt.
+#   * Part A (env scrub): credential-shaped environment variables
+#     (*API_KEY, *TOKEN, *SECRET, *PASSWORD, ...) are dropped from the
+#     environment the command inherits, so a command cannot echo a
+#     provider key it never needed.
+#
+# What the guard does NOT block:
+#   * a command that reaches outside the worktree WITHOUT naming a path:
+#     a shell pipeline, `python3 -c ...`, a network fetch, a subprocess
+#     that walks the filesystem itself.  The guard reads a string, not a
+#     syscall trace.
+#   * writes outside the worktree: this is a read-path guard.  The
+#     read/write/edit tools have their own workdir confinement
+#     (Worker._safe).
+#   * the harness's own commands (git, pytest, ...): only worker-issued
+#     exec commands pass through the guard.
+#   * anything at all, when the deployment config has no exec_guard
+#     section or ships it disabled: the guard is opt-in per install, so
+#     an install without a deployment config keeps the pre-guard
+#     behaviour.  config/deployment.example.json ships it ENABLED.
+#
+# So the guard raises the cost of a casual escape and makes the attempt
+# visible in the transcript.  It is NOT a security boundary: a worker
+# that must be contained needs an OS-level sandbox.
+
+# Credential-shaped environment names: the env scrub drops these from the
+# environment a worker command inherits.
+EXEC_GUARD_SECRET_ENV_SUFFIXES = (
+    "_API_KEY",
+    "_TOKEN",
+    "_SECRET",
+    "_SECRET_KEY",
+    "_PASSWORD",
+    "_PASSWD",
+    "_CREDENTIAL",
+    "_CREDENTIALS",
+    "_ACCESS_KEY",
+    "_PRIVATE_KEY",
+    "_SESSION_KEY",
+)
+# Exact names that are credential-shaped but carry no suffix above.
+EXEC_GUARD_SECRET_ENV_NAMES = (
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "GITHUB_TOKEN",
+    "GH_TOKEN",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "NPM_TOKEN",
+)
+# Path prefixes a worker command may name even though they live outside
+# the worktree: the system tool directories and the standard streams.
+EXEC_GUARD_SYSTEM_PATHS = (
+    "/bin/",
+    "/sbin/",
+    "/usr/bin/",
+    "/usr/sbin/",
+    "/usr/local/bin/",
+    "/dev/null",
+    "/dev/stdin",
+    "/dev/stdout",
+    "/dev/stderr",
+)
+
+
+def _exec_guard_env_is_secret(name: str) -> bool:
+    """Is this environment variable name credential-shaped?"""
+    if name in EXEC_GUARD_SECRET_ENV_NAMES:
+        return True
+    return name.upper().endswith(EXEC_GUARD_SECRET_ENV_SUFFIXES)
+
+
+def _exec_guard_tokens(command: str) -> list[str]:
+    """Split a command line into tokens, tolerating unbalanced quotes."""
+    try:
+        return shlex.split(command)
+    except ValueError:
+        return command.split()
+
+
+def _exec_guard_pieces(token: str) -> list[str]:
+    """The path-ish fragments of one token (redirections, flag=value)."""
+    pieces = [token]
+    for sep in (">", "<"):
+        expanded: list[str] = []
+        for piece in pieces:
+            expanded.extend(piece.split(sep))
+        pieces = expanded
+    out = []
+    for piece in pieces:
+        piece = piece.strip()
+        if not piece:
+            continue
+        out.append(piece)
+        if "=" in piece:
+            head, _, tail = piece.partition("=")
+            # "--flag=/some/path" names a path; "VAR=value" is an
+            # assignment, and its value is usually not a path at all.
+            if tail and head.startswith("-"):
+                out.append(tail)
+    return out
+
+
+def _exec_guard_looks_like_path(piece: str) -> bool:
+    """Does this fragment name a filesystem path (rather than a flag)?"""
+    if not piece or piece.startswith("-"):
+        return False
+    if "://" in piece:  # a URL, not a path
+        return False
+    if piece.startswith(("$HOME", "${HOME}")):
+        return True
+    if piece.startswith(("/", "~")):
+        return True
+    if piece == "..":
+        return True
+    if "/" in piece and not piece.startswith("$"):
+        return True
+    return False
+
+
+def _exec_guard_resolve(piece: str, workdir: str) -> str:
+    """Resolve a path fragment against the worktree (home refs included)."""
+    if piece.startswith("${HOME}"):
+        piece = os.path.expanduser("~" + piece[len("${HOME}"):])
+    elif piece.startswith("$HOME"):
+        piece = os.path.expanduser("~" + piece[len("$HOME"):])
+    elif piece.startswith("~"):
+        piece = os.path.expanduser(piece)
+    if os.path.isabs(piece):
+        return os.path.realpath(piece)
+    return os.path.realpath(os.path.join(workdir, piece))
+
+
+def _exec_guard_path_allowed(resolved: str, allow_paths: list[str]) -> bool:
+    """Is a resolved path on the exempt list?"""
+    for prefix in EXEC_GUARD_SYSTEM_PATHS:
+        if prefix.endswith("/"):
+            if resolved.startswith(prefix):
+                return True
+        elif resolved == prefix:
+            return True
+    for prefix in allow_paths:
+        prefix = str(prefix)
+        if not prefix:
+            continue
+        if resolved == prefix.rstrip("/") or resolved.startswith(prefix):
+            return True
+    return False
+
+
+def exec_guard_check(command: str, workdir: str,
+                     cfg: dict | None = None) -> str | None:
+    """Return why a command must not run, or None when it may run.
+
+    The check is a string check: it sees the command a worker asked for,
+    not the syscalls that command makes.  See the section comment above
+    for exactly what that does and does not cover.
+    """
+    if not isinstance(cfg, dict) or not cfg.get("enabled"):
+        return None
+    allow_paths = [str(p) for p in (cfg.get("allow_paths") or []) if str(p)]
+    root = os.path.realpath(workdir)
+    for token in _exec_guard_tokens(command):
+        for piece in _exec_guard_pieces(token):
+            if not _exec_guard_looks_like_path(piece):
+                continue
+            if "$" in piece and not piece.startswith(("$HOME", "${HOME}")):
+                # An expansion we cannot resolve statically: the guard
+                # does not guess, it stays out of the way.
+                continue
+            resolved = _exec_guard_resolve(piece, root)
+            if resolved == root or resolved.startswith(root + os.sep):
+                continue
+            if _exec_guard_path_allowed(resolved, allow_paths):
+                continue
+            return (f"the command names a path outside the worktree: "
+                    f"{piece!r} (resolved to {resolved})")
+    return None
+
+
+def exec_guard_env(env: dict, cfg: dict | None = None) -> tuple[dict, list[str]]:
+    """Return the environment a guarded command inherits, and what was dropped."""
+    if (not isinstance(cfg, dict) or not cfg.get("enabled")
+            or cfg.get("scrub_env") is False):
+        return dict(env), []
+    kept = {k: v for k, v in env.items() if not _exec_guard_env_is_secret(k)}
+    dropped = sorted(set(env) - set(kept))
+    return kept, dropped
+
+
 class Worker:
     def __init__(self, workdir: str, exec_timeout: int,
                  ctx_store: ContextStore | None = None,
-                 codemap: CodeMap | None = None):
+                 codemap: CodeMap | None = None,
+                 exec_guard: dict | None = None):
         self.workdir = os.path.realpath(workdir)
         self.exec_timeout = exec_timeout
         self.files_changed: list[str] = []
@@ -773,6 +976,11 @@ class Worker:
         # Native code map (issue #80): when an index is attached,
         # code_query answers questions about the worktree's symbols.
         self.codemap = codemap
+        # Exec guard (issue #170): the deployment config's
+        # workers.exec_guard section.  Absent or disabled means the
+        # pre-guard behaviour; see the exec-guard section comment for
+        # exactly what the guard does and does not block.
+        self.exec_guard = exec_guard if isinstance(exec_guard, dict) else {}
 
     def _safe(self, path: str) -> str:
         full = os.path.realpath(os.path.join(self.workdir, path))
@@ -806,6 +1014,44 @@ class Worker:
 
     def _exec(self, command: str, timeout: int) -> str:
         self.commands.append(command)
+        # Exec guard (issue #170): the command string is checked BEFORE
+        # the shell runs it.  A refused command never runs; the result
+        # says so, so the attempt is visible in the transcript instead of
+        # silently succeeding.
+        #
+        # What this guard DOES block (when workers.exec_guard.enabled):
+        #   * a command that NAMES a path outside the worktree -- an
+        #     absolute path, a "~" home reference or a "../" escape is
+        #     refused with exit=126 and "[exec-guard] BLOCKED"; the
+        #     system tool directories, the standard streams under /dev
+        #     and the operator's allow_paths are exempt;
+        #   * the credential-shaped environment variables (*API_KEY,
+        #     *TOKEN, *SECRET, *PASSWORD, ...) are dropped from the
+        #     environment the command inherits.
+        #
+        # What this guard does NOT block:
+        #   * a command that reaches outside the worktree WITHOUT naming
+        #     a path: a shell pipeline, `python3 -c ...`, a network fetch
+        #     or a subprocess that walks the filesystem itself.  The
+        #     guard reads a string, not a syscall trace;
+        #   * the difference between a read and a write: a NAMED
+        #     outside path is refused either way, and a path a process
+        #     resolves for itself is not seen at all.  The read/write/
+        #     edit tools have their own workdir confinement (_safe);
+        #   * the harness's own commands (git, pytest, ...): only
+        #     worker-issued exec commands pass through the guard;
+        #   * anything at all, when the deployment config has no
+        #     exec_guard section or ships it disabled -- the guard is
+        #     opt-in per install.  config/deployment.example.json ships
+        #     it ENABLED.
+        #
+        # So the guard raises the cost of a casual escape and makes the
+        # attempt visible.  It is NOT a security boundary: a worker that
+        # must be contained needs an OS-level sandbox.
+        reason = exec_guard_check(command, self.workdir, self.exec_guard)
+        if reason:
+            return (f"exit=126\n[exec-guard] BLOCKED: {reason}\n"
+                    f"command: {command}")
         # Worker shells are non-interactive: ~/.profile is never sourced,
         # so the cargo bin dir (and similar) would be missing from PATH.
         # Set it explicitly — Rust workers need cargo for build/test.
@@ -813,6 +1059,9 @@ class Worker:
         cargo_bin = os.path.expanduser("~/.cargo/bin")
         if cargo_bin not in env.get("PATH", "").split(os.pathsep):
             env["PATH"] = cargo_bin + os.pathsep + env.get("PATH", "")
+        # Exec guard, Part A: drop credential-shaped variables from the
+        # environment the command inherits.
+        env, scrubbed = exec_guard_env(env, self.exec_guard)
         try:
             proc = subprocess.run(
                 command, shell=True, cwd=self.workdir, timeout=timeout,
@@ -821,6 +1070,9 @@ class Worker:
         except subprocess.TimeoutExpired:
             return f"TIMEOUT after {timeout}s: {command}"
         out = (proc.stdout or "") + (proc.stderr or "")
+        if scrubbed:
+            out = (f"[exec-guard] scrubbed environment variables: "
+                   f"{', '.join(scrubbed)}\n" + out)
         if self.ctx_store is not None:
             return self._exec_stored(proc.returncode, out)
         if len(out) > 8000:
@@ -1305,13 +1557,16 @@ def main() -> int:
           "chain": [f"{n}/{m}" for n, _, m in chain],
           "stored_output": stored_output,
           "code_map": codemap is not None,
+          "exec_guard": bool(_cfg("workers", "exec_guard", "enabled",
+                                  default=False)),
           "ctx_store_dir": ctx_store_dir or None})
 
     with open(args.brief, encoding="utf-8") as fh:
         brief = fh.read()
 
     worker = Worker(workdir, args.exec_timeout, ctx_store=ctx_store,
-                    codemap=codemap)
+                    codemap=codemap,
+                    exec_guard=_cfg("workers", "exec_guard", default=None))
     # Context Mode: the retrieval tool is advertised only when the mode is
     # on, so an off run is byte-for-byte the pre-#52 tool set.  The code
     # map tool follows the same rule: it is advertised only when the gate
