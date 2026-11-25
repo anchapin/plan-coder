@@ -34,7 +34,7 @@ import re
 import statistics
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 LEDGER_DEFAULT = (
     "/home/hatch/workspace/goals/token-plan-coding-manager-setup/"
@@ -77,7 +77,7 @@ TEST_PATH_RULES = (
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def parse_ts(text: str) -> datetime | None:
@@ -85,7 +85,7 @@ def parse_ts(text: str) -> datetime | None:
         return None
     try:
         return datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ").replace(
-            tzinfo=timezone.utc
+            tzinfo=UTC
         )
     except ValueError:
         return None
@@ -106,7 +106,7 @@ class Gh:
 
     def run(self, args: list[str]) -> tuple[int, str, str]:
         self.calls += 1
-        proc = subprocess.run(  # noqa: PLW1510 - read-only, exit code inspected
+        proc = subprocess.run(
             ["gh", *args],
             capture_output=True,
             text=True,
@@ -280,7 +280,7 @@ def check_state_from_runs(runs: list[dict], ledger_ts: datetime) -> tuple[str, d
         if started is not None and started > ledger_ts:
             continue
         name = run.get("name") or ""
-        key = (started or datetime.min.replace(tzinfo=timezone.utc))
+        key = (started or datetime.min.replace(tzinfo=UTC))
         if name not in latest or key >= latest[name][0]:
             latest[name] = (key, run)
     names = [run for _, run in latest.values()]
@@ -389,7 +389,6 @@ def base_sha_as_of(gh: Gh, repo: str, base_ref: str, base_ref_oid: str,
     reconstructed from the base branch's commit history up to ledger_ts,
     excluding the PR's own commits (they must not be mistaken for base).
     """
-    method = ""
     if base_ref_oid:
         dated = commit_date(gh, repo, base_ref_oid)
         dated_dt = parse_ts(dated)
@@ -400,8 +399,10 @@ def base_sha_as_of(gh: Gh, repo: str, base_ref: str, base_ref_oid: str,
     code, out, err = gh.run(
         [
             "api",
-            f"repos/{repo}/commits?sha={base_ref}&until="
-            f"{ledger_ts.strftime('%Y-%m-%dT%H:%M:%SZ')}",
+            (
+                f"repos/{repo}/commits?sha={base_ref}&until="
+                f"{ledger_ts.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+            ),
             "--jq",
             '[.[] | {"sha": .sha, "d": .commit.committer.date}]',
         ]
