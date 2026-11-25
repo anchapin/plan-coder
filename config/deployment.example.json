@@ -46,6 +46,12 @@
     ],
     "max_tokens_out": 0,
     "cycle_tokens_out_budget": 0,
+    "exec_guard": {
+      "_about": "Worker exec guard (plan-coder #170, residue of #169): a harness-side check on every command string a worker asks to run, BEFORE the shell runs it. Part A (env scrub): credential-shaped environment variables (*API_KEY, *TOKEN, *SECRET, *PASSWORD, ...) are dropped from the environment the command inherits. Part B (scoped deny list): a command that names a path outside the worktree -- an absolute path, a '~' home reference, or a '../' escape -- is refused and the tool result carries '[exec-guard] BLOCKED'; the system tool directories (/bin, /usr/bin, ...), the standard streams under /dev and the prefixes in allow_paths are exempt. WHAT IT DOES NOT BLOCK: a command that reaches outside the worktree without naming a path (a shell pipeline, python3 -c, a network fetch), writes outside the worktree, or the harness's own commands. The guard is a coarse string check, not a sandbox or a security boundary. Ships ENABLED here; setting enabled to false turns it off and leaves worker exec UNCONFINED -- the residual risk of that choice is the operator's, and it is not recorded anywhere else.",
+      "enabled": true,
+      "scrub_env": true,
+      "allow_paths": []
+    },
     "failover": {
       "enabled": false,
       "failure_threshold": 2,
