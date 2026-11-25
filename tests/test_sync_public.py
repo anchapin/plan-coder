@@ -248,21 +248,45 @@ class TestScanTreeInclusionExclusion(unittest.TestCase):
         self.fx.commit_all("add license")
         self.assertEqual(self.scan(), [])
 
-    def test_undecodable_file_is_skipped_not_fatal(self):
-        # Binary assets are not readable as UTF-8; the scan skips them
-        # instead of blowing up.
+    def test_undecodable_file_fails_closed_and_names_file(self):
+        # A file that is not valid UTF-8 cannot be scanned, so it must
+        # block the publish instead of being silently skipped (issue
+        # #173). The hit names the file.
         path = self.fx.root / "assets" / "logo.bin"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"\xff\xfe\x00\x01binary\x80")
         self.fx.commit_all("add binary asset")
-        self.assertEqual(self.scan(), [])
+        hits = self.scan()
+        self.assertTrue(hits, "expected a scan hit for the undecodable file")
+        self.assertTrue(any("logo.bin" in h for h in hits), hits)
+        # Gate level: the run aborts and names the file.
+        proc = self.fx.run_gate("--no-push")
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        self.assertIn("ABORT: public-tree scan hits", proc.stdout)
+        self.assertIn("logo.bin", proc.stdout)
 
-    def test_broken_symlink_is_skipped_not_fatal(self):
+    def test_broken_symlink_fails_closed_and_names_file(self):
+        # A dangling symlink cannot be opened either — an unreadable
+        # file is exactly what cannot be scanned, so it fails closed
+        # and names the file.
         link = self.fx.root / "assets" / "dangling"
         link.parent.mkdir(parents=True, exist_ok=True)
         link.symlink_to(self.fx.root / "assets" / "nowhere")
         self.fx.commit_all("add dangling link")
-        self.assertEqual(self.scan(), [])
+        hits = self.scan()
+        self.assertTrue(hits, "expected a scan hit for the broken symlink")
+        self.assertTrue(any("dangling" in h for h in hits), hits)
+        # Gate level: the run aborts and names the file.
+        proc = self.fx.run_gate("--no-push")
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        self.assertIn("ABORT: public-tree scan hits", proc.stdout)
+        self.assertIn("dangling", proc.stdout)
+
+    def test_no_unreadable_files_are_allowlisted_by_default(self):
+        # The binary-asset escape hatch exists but is empty: no file is
+        # silently skipped by the scan (issue #173).
+        mod = load_gate(self.fx.root / "bin" / "sync_public.py")
+        self.assertEqual(set(mod.ALLOWED_UNREADABLE), set())
 
     def test_clean_fixture_tree_has_no_hits(self):
         self.assertEqual(self.scan(), [])
@@ -375,6 +399,21 @@ class TestFailClosedPaths(unittest.TestCase):
         proc = self.fx.run_gate("--no-push")
         self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
         self.assertIn("ABORT: public-tree scan hits", proc.stdout)
+        self.assert_no_side_effects(before)
+
+    def test_undecodable_file_aborts_without_commit(self):
+        # A publishable file the scan cannot read cannot be checked for
+        # forbidden literals or secret shapes, so it fails the gate
+        # closed and names the file (issue #173).
+        path = self.fx.root / "assets" / "logo.bin"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"\xff\xfe\x00\x01binary\x80")
+        self.fx.commit_all("add binary asset")
+        before = self.fx.head_count()
+        proc = self.fx.run_gate("--no-push")
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        self.assertIn("ABORT: public-tree scan hits", proc.stdout)
+        self.assertIn("logo.bin", proc.stdout)
         self.assert_no_side_effects(before)
 
     def test_py_compile_failure_aborts_without_commit(self):

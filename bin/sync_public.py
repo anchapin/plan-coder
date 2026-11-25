@@ -11,9 +11,9 @@ This script is the fail-closed gate between the live working tree and
 the public remote:
 
 1. Scan the whole public tree for internal identifiers and secret
-   shapes. Any hit aborts before commit. (Credential *labels* such as
-   "custom.zai" are configuration names, not secrets, and are allowed;
-   key material never appears in this repo by design.)
+   shapes. Any hit aborts before commit; a file that cannot be read or
+   decoded is a hit too — the scan fails closed rather than skipping
+   it. (Credential *labels* are configuration names, not secrets.)
 2. py_compile every Python file under bin/.
 3. Report whether the live sources behind the hand-generalized docs /
    prompt templates (OPERATIONS.md) changed since the last run
@@ -81,7 +81,7 @@ SECRET_SHAPES = [
     r"BEGIN [A-Z ]*PRIVATE KEY",
 ]
 ALLOWED_NAME_FILES = {"LICENSE"}  # carries the copyright holder's name
-
+ALLOWED_UNREADABLE: frozenset[str] = frozenset()  # reviewed exceptions; empty by default
 DOC_SOURCES = _doc_sources()
 
 
@@ -103,9 +103,9 @@ def scan_tree() -> list[str]:
         fn = os.path.basename(rel)
         path = os.path.join(REPO, rel)
         if True:
-            try:
-                text = open(path, encoding="utf-8", errors="strict").read()
-            except (UnicodeDecodeError, OSError):
+            text = _read_scannable(rel, path)
+            if text is None:
+                hits.append(f"{path}: unreadable or undecodable file")
                 continue
             for bad in FORBIDDEN:
                 if bad.lower() in text.lower():
@@ -211,6 +211,25 @@ def main() -> int:
                   "last_result": result, "last_commit": head})
     json.dump(state, open(STATE, "w"), indent=1)
     return 0
+
+
+def _read_scannable(rel: str, path: str) -> str | None:
+    """Read one publishable file for the scan.
+
+    Returns the file text, or None when the file cannot be read or
+    decoded. Such a file is exactly the file that cannot be scanned for
+    forbidden literals or secret shapes, so it fails the publish gate
+    closed (issue #173) instead of being skipped in silence. An
+    explicit, reviewed allowlist entry (ALLOWED_UNREADABLE) is the only
+    way a file is skipped, and it is empty by default.
+    """
+    try:
+        with open(path, encoding="utf-8", errors="strict") as fh:
+            return fh.read()
+    except (UnicodeDecodeError, OSError):
+        if rel in ALLOWED_UNREADABLE:
+            return ""  # reviewed exception: an unreadable allowed file
+        return None
 
 
 if __name__ == "__main__":
