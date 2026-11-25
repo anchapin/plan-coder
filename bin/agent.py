@@ -1063,13 +1063,13 @@ class Worker:
         # environment the command inherits.
         env, scrubbed = exec_guard_env(env, self.exec_guard)
         try:
-            proc = subprocess.run(
-                command, shell=True, cwd=self.workdir, timeout=timeout,
-                capture_output=True, text=True, env=env,
-            )
+            proc = subprocess.Popen(
+                command, shell=True, cwd=self.workdir, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True, env=env, start_new_session=True)
+            stdout, stderr = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            return f"TIMEOUT after {timeout}s: {command}"
-        out = (proc.stdout or "") + (proc.stderr or "")
+            return f"TIMEOUT after {timeout}s: {command}\n[exec] {_kill_process_group(proc)}"
+        out = (stdout or "") + (stderr or "")
         if scrubbed:
             out = (f"[exec-guard] scrubbed environment variables: "
                    f"{', '.join(scrubbed)}\n" + out)
@@ -1746,6 +1746,37 @@ def main() -> int:
     _tlog.close()
     print(report)
     return 0
+
+
+def _kill_process_group(proc: subprocess.Popen) -> str:
+    """Kill the whole process group of a timed-out exec command.
+
+    The exec command runs in its own session (``start_new_session=True``),
+    so the shell leads a fresh process group and every descendant of it --
+    a backgrounded child, a grandchild, a dev server -- sits in that
+    group.  Killing the group, not just the direct shell child, is what
+    makes a timed-out command leave nothing behind: the descendants
+    would otherwise keep running with the worker's workdir, environment
+    and credentials.  The direct child is reaped here too, so no zombie
+    is left over either.
+
+    Returns the note the timeout result string carries.
+    """
+    import signal
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        note = "process group killed"
+    except (ProcessLookupError, PermissionError):
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+            note = "process group killed"
+        except (ProcessLookupError, PermissionError):
+            note = "process group already gone; direct child killed"
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+    return note
 
 
 if __name__ == "__main__":
