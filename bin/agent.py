@@ -230,7 +230,10 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Read a file relative to the work directory.",
+            "description": (
+                "Read a file relative to the work directory. A read that "
+                "exceeds the per-call byte cap is truncated and says so; "
+                "page through a large file with offset/limit."),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -246,7 +249,10 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "write_file",
-            "description": "Create or overwrite a file relative to the work directory.",
+            "description": (
+                "Create or overwrite a file relative to the work directory. "
+                "A write over the per-call byte cap is refused and nothing "
+                "is written."),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -261,7 +267,10 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "edit_file",
-            "description": "Replace exact text in a file relative to the work directory.",
+            "description": (
+                "Replace exact text in a file relative to the work "
+                "directory. An edit whose result would exceed the per-call "
+                "byte cap is refused and the file is left unchanged."),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -314,6 +323,24 @@ CTX_READ_MAX_CHARS = int(os.environ.get("WORKER_CTX_READ_MAX_CHARS", "8000"))
 # the stored copy is itself capped, and the summary says so.
 CTX_STORE_MAX_CHARS = int(os.environ.get("WORKER_CTX_STORE_MAX_CHARS",
                                           "1000000"))
+
+# --- File tool byte caps (issue #175) -----------------------------------
+# The file tools are confined to the workdir by Worker._safe, but a single
+# call had no size limit: read_file could pull a whole multi-megabyte file
+# into one tool result, and write_file could put one there.  These caps are
+# an order of magnitude above a legitimate file (the biggest source file in
+# this repo is under 100 kB, the biggest data artifact under 500 kB), so
+# ordinary work is never affected; they bound one call, they do not shape
+# normal reads.
+#
+# READ: the content of one call is truncated at the cap, and the notice
+# names the cap so the worker can page the rest with offset/limit.
+# WRITE: the write is REFUSED before a single byte is written -- there is
+# no partial file and an existing file is left exactly as it was.
+FILE_READ_MAX_BYTES = int(os.environ.get("WORKER_FILE_READ_MAX_BYTES",
+                                         "2000000"))
+FILE_WRITE_MAX_BYTES = int(os.environ.get("WORKER_FILE_WRITE_MAX_BYTES",
+                                           "2000000"))
 
 CTX_READ_TOOL = {
     "type": "function",
@@ -884,13 +911,43 @@ class Worker:
 
     def _read(self, path: str, offset: int, limit: int) -> str:
         full = self._safe(path)
-        with open(full, encoding="utf-8", errors="replace") as fh:
-            lines = fh.readlines()
+        # Per-call byte cap (issue #175): the bytes one call may return are
+        # capped, so a read cannot pull an arbitrarily large chunk into the
+        # tool result (or into the stored-output store).  The file is
+        # streamed line by line, so the line count is known without holding
+        # the whole file in memory.
+        cap = FILE_READ_MAX_BYTES
         start = max(0, offset - 1)
-        chunk = lines[start : start + limit]
-        text = "".join(chunk)
-        header = (f"{path} (lines {offset}-{offset + len(chunk) - 1} of "
-                  f"{len(lines)}):")
+        end = start + max(0, limit)
+        total = window = 0
+        kept: list[str] = []
+        kept_bytes = dropped_bytes = 0
+        with open(full, encoding="utf-8", errors="replace") as fh:
+            for lineno, line in enumerate(fh):
+                total = lineno + 1
+                if not start <= lineno < end:
+                    continue
+                window += 1
+                raw = line.encode("utf-8")
+                room = cap - kept_bytes
+                if room <= 0:
+                    dropped_bytes += len(raw)
+                elif len(raw) > room:
+                    # A line that straddles the cap is cut at the cap
+                    # rather than dropped whole, so the caller still gets
+                    # the head of the chunk.
+                    kept.append(raw[:room].decode("utf-8", errors="replace"))
+                    dropped_bytes += len(raw) - room
+                    kept_bytes = cap
+                else:
+                    kept.append(line)
+                    kept_bytes += len(raw)
+        text = "".join(kept)
+        header = f"{path} (lines {offset}-{offset + window - 1} of {total}):"
+        if dropped_bytes:
+            header += (f" [truncated at the {cap}-byte read cap: "
+                       f"{dropped_bytes} bytes of this chunk were not read; "
+                       "narrow offset/limit to page through it]")
         if self.ctx_store is not None:
             # Context Mode read: store the whole chunk, return a capped
             # summary plus a handle (the old 12000-char cap dropped text
@@ -925,6 +982,13 @@ class Worker:
 
     def _write(self, path: str, content: str) -> str:
         full = self._safe(path)
+        size = len(content.encode("utf-8"))
+        if size > FILE_WRITE_MAX_BYTES:
+            # Refused BEFORE anything is written: no partial file, and an
+            # existing file at this path is left exactly as it was.
+            return (f"write refused: {path} is {size} bytes, over the "
+                    f"{FILE_WRITE_MAX_BYTES}-byte write cap; nothing was "
+                    "written")
         os.makedirs(os.path.dirname(full) or self.workdir, exist_ok=True)
         self._atomic_write(full, content)
         if path not in self.files_changed:
@@ -937,8 +1001,14 @@ class Worker:
             content = fh.read()
         if old_text not in content:
             return f"edit failed: old_text not found in {path}"
-        content = content.replace(old_text, new_text, 1)
-        self._atomic_write(full, content)
+        edited = content.replace(old_text, new_text, 1)
+        size = len(edited.encode("utf-8"))
+        if size > FILE_WRITE_MAX_BYTES:
+            # Refused BEFORE the write: the file keeps its old content.
+            return (f"edit refused: {path} would become {size} bytes, over "
+                    f"the {FILE_WRITE_MAX_BYTES}-byte write cap; the file "
+                    "was not changed")
+        self._atomic_write(full, edited)
         if path not in self.files_changed:
             self.files_changed.append(path)
         return f"edited {path}"

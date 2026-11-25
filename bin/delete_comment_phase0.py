@@ -261,10 +261,10 @@ def census(repo_root: str = REPO_ROOT, pattern: str = DEFAULT_GLOB) -> list:
 # ledger records which path classified each block (``method``).
 CLASSIFICATION_TABLE = {
     "bin/agent.py":
-        "76:K 102:D 132:K 139:K 142:K 291:K 306:D 310:D 313:K 350:K 540:K 550:D "
-        "560:K 598:K 704:D 742:T 746:T 782:D 818:D 895:D 920:D 1048:T 1059:D "
-        "1065:D 1134:K 1155:K 1173:T 1187:K 1206:K 1219:K 1245:K 1252:T 1272:D "
-        "1341:K 1354:T 1367:T 1401:K ",
+        "76:K 102:D 132:K 139:K 142:K 300:K 315:D 319:D 322:K 327:D 377:K 567:K 577:D "
+        "587:K 625:K 731:D 769:T 773:T 809:D 845:D 914:D 936:D 952:D 977:D 987:D "
+        "1007:D 1118:T 1129:D 1135:D 1204:K 1225:K 1243:T 1257:K 1276:K 1289:K 1315:K "
+        "1322:T 1342:D 1411:K 1424:T 1437:T 1471:K ",
     "bin/ast_grep_phase0_scan.py": "52:K 76:T 97:T 115:D 133:K",
     "bin/attention.py": "92:T 151:T 209:T 305:K 314:T 415:T",
     "bin/codemap.py":
@@ -346,15 +346,15 @@ BLOCK_NOTES = {
         "records why the malformed-plan validation sits outside the parse guard",
     "bin/agent.py:132":
         "states the capacity invariant (legacy providers keep their order)",
-    "bin/agent.py:291":
+    "bin/agent.py:300":
         "provenance: issue #52 + the Phase-1 spike doc + the measured basis",
-    "bin/agent.py:306":
+    "bin/agent.py:315":
         "records where the cap came from (the Phase-1 report measurement)",
-    "bin/agent.py:550":
+    "bin/agent.py:577":
         "records the measurement behind the mid-run no-edit gate",
-    "bin/agent.py:920":
+    "bin/agent.py:977":
         "records the 2026-10-26 write fault that forced the temp-file write",
-    "bin/agent.py:1272":
+    "bin/agent.py:1342":
         "records why the base commit is pinned before the worker starts",
     "bin/ast_grep_phase0_scan.py:115":
         "records why the C5 candidate was kept inline and not shipped",
