@@ -595,20 +595,64 @@ def _worktree_changed(workdir: str, base: str | None) -> bool | None:
     return len(names) > 0
 
 
+# Secret shapes masked before anything is persisted.
+#
+# One place, one list: every entry is (pattern, issuer), so a shape
+# that no longer matches anything this harness can see is easy to spot
+# and drop. The list is the payload set verified in the #169 security
+# audit (issue #171):
+#
+#   ghp_<alnum>            GitHub classic personal access token
+#   github_pat_<alnum>     GitHub fine-grained personal access token
+#   sk-<alnum>             DashScope / OpenRouter / OpenAI-style key
+#   Bearer <token>         HTTP bearer token
+#   AKIA + 16              AWS long-term access key id
+#   eyJ.a.b                MiniMax key value (JWT-shaped)
+#   <long>.<long>          z.ai (Zhipu) key value
+#   NAME=<value>            provider env-key assignment: ZAI_API_KEY=...,
+#                           MINIMAX_API_KEY=..., DASHSCOPE_API_KEY=...,
+#                           OPENROUTER_API_KEY=... (and any other
+#                           upper-case *_API_KEY a deployment names)
+#
+# ASIA-prefixed keys are temporary AWS session credentials and are
+# deliberately NOT in the set: the issue's verifier narrowed the
+# payload to long-lived keys. No word boundaries are used: a stored
+# line is JSON, so the character in front of a value is often the "n"
+# of an escaped newline, and a boundary there would let a key through.
+_SECRET_SHAPES = (
+    (r"ghp_[A-Za-z0-9]{16,}", "GitHub classic PAT"),
+    (r"github_pat_[A-Za-z0-9_]{16,}", "GitHub fine-grained PAT"),
+    (r"sk-[A-Za-z0-9_-]{16,}", "DashScope / OpenRouter / OpenAI-style key"),
+    (r"Bearer\s+[A-Za-z0-9._-]{16,}", "HTTP bearer token"),
+    (r"AKIA[0-9A-Z]{16}", "AWS access key id"),
+    (r"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}",
+     "MiniMax JWT-shaped key"),
+    (r"[A-Za-z0-9]{16,}\.[A-Za-z0-9]{16,}", "z.ai api key value"),
+    (r"\b[A-Z][A-Z0-9_]*_API_KEY\s*=\s*(?:\"[^\"\s]{8,}\"|'[^'\s]{8,}'|[^\s\"']{8,})",
+     "provider env-key assignment"),
+)
+
 _SECRET_SHAPE = re.compile(
-    r"(sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{16,}"
-    r"|github_pat_[A-Za-z0-9_]{16,}|Bearer\s+[A-Za-z0-9._-]{16,})")
+    "|".join(f"(?:{pattern})" for pattern, _issuer in _SECRET_SHAPES))
 
 
 def _redact(text: str) -> str:
-    """Hygiene for stored transcript lines (harness-tune 2026-10-25,
-    ideas brief T4): mask secret-shaped strings and shorten the home
-    directory prefix to ~. This is not a security boundary — workers
-    are worktree-confined and keys never pass through this process —
-    but tool output a worker catted can carry paths or token shapes
-    into the stored logs. Fails toward masking more, never toward
+    """Hygiene for every persisted artifact (harness-tune 2026-10-25,
+    ideas brief T4; issue #171): mask secret-shaped strings and shorten
+    the home directory prefix to ~. This is not a security boundary —
+    workers are worktree-confined and keys never pass through this
+    process — but tool output a worker catted, and the model's own
+    summary, can carry paths or token shapes into the stored logs and
+    into WORKER_REPORT.md. Fails toward masking more, never toward
     skipping the write: error classes, exit codes, and the first line
-    of output all survive."""
+    of output all survive.
+
+    The masked shapes are listed once in _SECRET_SHAPES, each with the
+    issuer it belongs to. Every harness write path that persists run
+    output goes through this function: the transcript log, the Context
+    Mode store, and the worker report. The worker's own file edits are
+    its deliverable and are deliberately left alone.
+    """
     home = os.path.expanduser("~")
     if home and home != "~":
         text = text.replace(home, "~")
@@ -1139,9 +1183,22 @@ def main() -> int:
 
     _tlog = open(transcript_path, "w", encoding="utf-8")
 
+    def _redact_value(value: object) -> object:
+        # Redact string values BEFORE json.dumps (supervisor fallout fix,
+        # issue #171): redacting the serialized line let a dotted-shape
+        # match cut through a JSON escape sequence and leave an invalid
+        # \escape in the stored transcript.
+        if isinstance(value, str):
+            return _redact(value)
+        if isinstance(value, dict):
+            return {k: _redact_value(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [_redact_value(v) for v in value]
+        return value
+
     def tlog(obj: dict) -> None:
         obj = {"ts": datetime.now(timezone.utc).isoformat(), **obj}
-        _tlog.write(_redact(json.dumps(obj, ensure_ascii=False)) + "\n")
+        _tlog.write(json.dumps(_redact_value(obj), ensure_ascii=False) + "\n")
         _tlog.flush()
 
     run_started = time.monotonic()
@@ -1341,6 +1398,12 @@ def main() -> int:
                             stored_output=stored_output)
         + "\n"
     )
+    # Persisted outputs are redacted before they land on disk (issue
+    # #171): the summary is model prose and the manifest carries git
+    # output, so both can carry secret-shaped strings into a file the
+    # supervisor reads and the dashboard renders. Same pass as the
+    # transcript log and the Context Mode store.
+    report = _redact(report)
     with open(os.path.join(workdir, "WORKER_REPORT.md"), "w", encoding="utf-8") as fh:
         fh.write(report)
     tlog({"event": "finished", "steps": steps_used,
