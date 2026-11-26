@@ -37,7 +37,19 @@ Design constraints, mirroring the other bin/ tools:
     MAX_MESSAGE_CHARS, each snippet to MAX_SNIPPET_CHARS, the result
     list to MAX_LIMIT rows and to MAX_PER_RUN rows per run, so one
     archived tool result can never blow up a caller's context (the
-    Hermes 74K-char lesson).
+    Hermes 74K-char lesson).  The per-message cap exists because a
+    single transcript line can carry a huge tool result: past
+    MAX_MESSAGE_CHARS the tail is almost never the part a diagnosis
+    query needs, and it inflates the index.  A returned snippet is
+    likewise only ever enough to judge relevance, never a data dump.
+  * Demotion arithmetic: DEMOTION_PENALTY is a flat penalty added to
+    a demoted row's BM25 score (FTS5 BM25 is negative, and more
+    negative is better, so adding a positive penalty pushes the row
+    down without ever removing it).  A run counts as boilerplate-heavy
+    when at least BOILERPLATE_FRACTION of its messages carry
+    cron/automation vocabulary (and at least BOILERPLATE_MIN_HITS
+    messages do), or when its run_id names an automation run outright;
+    ``is_boilerplate_run`` is the operative definition.
 
 Usage:
     python3 bin/transcript_search.py build [--transcripts-dir DIR]
@@ -67,28 +79,14 @@ import time
 from datetime import UTC, datetime
 from urllib.parse import quote
 
-# --- caps (returned / indexed content is bounded, always) -------------------
-
-# One indexed message: a single transcript line can carry a huge tool
-# result; past this many characters the tail is almost never the part a
-# diagnosis query needs, and it inflates the index.
 MAX_MESSAGE_CHARS = 20_000
-# One returned snippet: enough to judge relevance, never a data dump.
 MAX_SNIPPET_CHARS = 400
 DEFAULT_LIMIT = 10
 MAX_LIMIT = 100
 DEFAULT_PER_RUN = 3
 MAX_PER_RUN = 20
 
-# --- boilerplate demotion ----------------------------------------------------
-
-# Flat penalty added to a demoted row's BM25 score (FTS5 BM25 is
-# negative, more negative = better, so adding a positive penalty pushes
-# the row down without ever removing it).
 DEMOTION_PENALTY = 5.0
-# A run is boilerplate-heavy when at least this fraction of its messages
-# carry cron/automation vocabulary (and at least BOILERPLATE_MIN_HITS
-# messages do), or when its run_id names an automation run outright.
 BOILERPLATE_FRACTION = 0.25
 BOILERPLATE_MIN_HITS = 2
 BOILERPLATE_MARKERS = (
@@ -109,9 +107,6 @@ _TERM_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.\-]*")
 
 class TranscriptSearchError(Exception):
     """The index could not be built or searched."""
-
-
-# --- deployment config (same search order as bin/trace_summary.py) ----------
 
 
 def _load_deployment_config() -> dict:
@@ -170,9 +165,6 @@ def default_index_path() -> str:
     return index_path_from_config(_load_deployment_config())
 
 
-# --- run-id context ----------------------------------------------------------
-
-
 def parse_run_id(run_id: str) -> tuple[str, int | None]:
     """(repo, issue) derivable from a run_id, else (run_id, None).
 
@@ -186,9 +178,6 @@ def parse_run_id(run_id: str) -> tuple[str, int | None]:
     if match is None:
         return run_id, None
     return match.group(1), int(match.group(2))
-
-
-# --- message extraction ------------------------------------------------------
 
 
 def _collect_strings(value, out: list[str]) -> None:
@@ -250,8 +239,6 @@ def is_boilerplate_run(run_id: str, contents: list[str]) -> bool:
     hits = sum(1 for content in contents if is_boilerplate_text(content))
     return hits >= BOILERPLATE_MIN_HITS and hits / len(contents) >= BOILERPLATE_FRACTION
 
-
-# --- building the index ------------------------------------------------------
 
 _SCHEMA = (
     (
@@ -356,9 +343,6 @@ def build_index(transcripts_dir: str, db_path: str) -> dict:
     return stats
 
 
-# --- searching the index -----------------------------------------------------
-
-
 def to_match_query(query: str) -> str:
     """A plain operator query -> a safe FTS5 MATCH expression: every
     term quoted, terms AND-ed.  Raises TranscriptSearchError when the
@@ -440,9 +424,6 @@ def search_index(
         if len(results) >= limit:
             break
     return results
-
-
-# --- command line ------------------------------------------------------------
 
 
 def main(argv: list[str] | None = None) -> int:
