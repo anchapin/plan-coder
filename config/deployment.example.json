@@ -95,6 +95,10 @@
       "enabled": false,
       "parts": ["fingerprint", "regress"]
     },
+    "playbooks": {
+      "_about": "Per-repo learned playbooks (issue #184, Phase 1): bin/playbook.py resolves its runtime store from dir here when set, else <state.dir>/playbooks (or $PLAN_CODER_PLAYBOOKS_DIR). The store lives outside every target repo and is never committed; seed entries ship in examples/playbooks/. Writes are staged-approval only (propose writes pending entries, never active), the lifecycle archives and never deletes, and there is no LLM consolidation. Not wired into supervisor dispatch; integration is a separate operator decision.",
+      "dir": ""
+    },
     "verification_stamp": {
       "_about": "Verification stamp spike (issue #95, from #94 Part A): at supervisor collection, bin/verify_stamp.py classifies what a run actually verified (E2E/SUITE/TARGETED/NONE) from its transcript with the Phase 0 segment-anchored classifier and appends a stamp row (verify class, worker vs collection commands, clean_base_verified yes|no|not_claimed) to verification_ledger.jsonl in the state dir. OBSERVE-ONLY: nothing reads the stamp to gate, block, flag or grade anything. Ships disabled; enabling is a separate operator decision.",
       "enabled": false
